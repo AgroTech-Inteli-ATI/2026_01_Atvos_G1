@@ -29,11 +29,15 @@ sidebar_position: 3
 
 ---
 
-## Dataset: Inventario_atvos_silver (parts 2 e 4 — estrutura idêntica)
+## Dataset: Inventario_atvos_silver (parts 1, 2, 3 e 4 — estrutura idêntica)
 
-**Arquivos:**  
+**Arquivos:** 
+- `data/processed/Inventario_atvos_21_27_part_1_silver.parquet` — 50.000 linhas, 75 colunas   
 - `data/processed/Inventario_atvos_21_27_part_2_silver.parquet` — 50.000 linhas, 75 colunas  
+- `data/processed/Inventario_atvos_21_27_part_3_silver.parquet` — 50.000 linhas, 75 colunas
 - `data/processed/Inventario_atvos_21_27_part_4_silver.parquet` — 17.426 linhas, 75 colunas
+
+
 
 ### Identificadores e Chaves
 
