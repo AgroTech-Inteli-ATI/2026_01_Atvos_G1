@@ -44,7 +44,25 @@ sidebar_position: 1
 
 ---
 
-### Fonte 2 — Inventário Atvos 2021-2027 (Parte 2)
+### Fonte 2 — Inventário Atvos 2021-2027 (Parte 1)
+
+| Atributo | Valor |
+|----------|-------|
+| **Arquivo** | `data/raw/Inventario_atvos_21_27_part_1.xlsx` |
+| **Silver** | `data/processed/Inventario_atvos_21_27_part_1_silver.parquet` |
+| **Formato** | Excel (.xlsx) |
+| **Linhas (raw)** | 50.000 |
+| **Colunas (raw)** | 74 |
+| **Colunas (silver)** | 75 (67 originais mantidas + 8 flags de negócio) |
+| **Granularidade** | 1 linha = 1 talhão × 1 safra |
+| **Chave primária** | `CHAVESIG` (inteiro único) |
+| **Chave de junção** | `NUM` + `SETOR` + `TALHAO` |
+| **Safras cobertas** | 2020/21 a 2026/27 |
+| **Data de geração** | 2026-04-23 |
+
+---
+
+### Fonte 3 — Inventário Atvos 2021-2027 (Parte 2)
 
 | Atributo | Valor |
 |----------|-------|
@@ -57,12 +75,30 @@ sidebar_position: 1
 | **Granularidade** | 1 linha = 1 talhão × 1 safra |
 | **Chave primária** | `CHAVESIG` (inteiro único) |
 | **Chave de junção** | `NUM` + `SETOR` + `TALHAO` |
-| **Safras cobertas** | 2021–2022 (SAFRA 22122) |
+| **Safras cobertas** | 2020/21 a 2026/27 |
 | **Data de geração** | 2026-04-23 |
 
 ---
 
-### Fonte 3 — Inventário Atvos 2021-2027 (Parte 4)
+### Fonte 4 — Inventário Atvos 2021-2027 (Parte 3)
+
+| Atributo | Valor |
+|----------|-------|
+| **Arquivo** | `data/raw/Inventario_atvos_21_27_part_3.xlsx` |
+| **Silver** | `data/processed/Inventario_atvos_21_27_part_3_silver.parquet` |
+| **Formato** | Excel (.xlsx) |
+| **Linhas (raw)** | 50.000 |
+| **Colunas (raw)** | 74 |
+| **Colunas (silver)** | 75 (67 originais mantidas + 8 flags de negócio) |
+| **Granularidade** | 1 linha = 1 talhão × 1 safra |
+| **Chave primária** | `CHAVESIG` (inteiro único) |
+| **Chave de junção** | `NUM` + `SETOR` + `TALHAO` |
+| **Safras cobertas** | 2020/21 a 2026/27 |
+| **Data de geração** | 2026-04-23 |
+
+---
+
+### Fonte 5 — Inventário Atvos 2021-2027 (Parte 4)
 
 | Atributo | Valor |
 |----------|-------|
@@ -75,12 +111,12 @@ sidebar_position: 1
 | **Granularidade** | 1 linha = 1 talhão × 1 safra |
 | **Chave primária** | `CHAVESIG` (inteiro único) |
 | **Chave de junção** | `NUM` + `SETOR` + `TALHAO` |
-| **Safras cobertas** | 2022–2023 (SAFRA 22223) |
+| **Safras cobertas** | 2020/21 a 2026/27 |
 | **Data de geração** | 2026-04-23 |
 
 ---
 
-## Colunas do Inventário (Partes 2 e 4 — estrutura idêntica)
+## Colunas do Inventário (Partes 1, 2, 3 e 4 — estrutura idêntica)
 
 | Coluna | Tipo | Descrição | Chave? | Nulos |
 |--------|------|-----------|--------|-------|
@@ -170,13 +206,15 @@ sidebar_position: 1
 ## Relações entre Fontes
 
 ```
-Inventario_part_2 (safras 21-22)  ─┐
-                                    ├─ Unir por CHAVESIG → Inventario Completo
-Inventario_part_4 (safras 22-23)  ─┘
-                        │
-                        └─── Cruzar com Correcao_talhoes via:
-                             Faz_Origem = NUM, Setor_Origem = SETOR,
-                             Talhao_Origem = TALHAO
+Inventario_part_1  ─┐
+Inventario_part_2  ─┤
+                    ├─ Unir por CHAVESIG → Inventario Completo
+Inventario_part_3  ─┤
+Inventario_part_4  ─┘
+                    │
+                    └─── Cruzar com Correcao_talhoes via:
+                         Faz_Origem = NUM, Setor_Origem = SETOR,
+                         Talhao_Origem = TALHAO
 ```
 
 ---
