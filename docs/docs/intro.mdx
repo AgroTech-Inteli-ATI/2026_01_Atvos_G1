@@ -1,8 +1,50 @@
 ---
 slug: /
 sidebar_position: 1
+title: "Visão Geral"
 ---
 
+# G01 — Atvos
 
+Projeto de análise de dados agrícolas em parceria com a **Atvos**, desenvolvido no Módulo 10 do Inteli.
 
-# G01 - Atvos
+## Objetivo
+
+Construir um pipeline de dados end-to-end para o inventário de talhões da Atvos, cobrindo ingestão, limpeza, análise exploratória e modelagem preditiva de produtividade (TCH).
+
+## Sprint 1 — Pipeline de Dados
+
+A Sprint 1 entregou a camada **Silver**: dados limpos, documentados e prontos para análise.
+
+| Entregável | Status |
+|------------|--------|
+| Mapeamento das fontes | Feito |
+| Script de ingestão Bronze | Feito |
+| Regras de limpeza documentadas | Feito |
+| Script de limpeza Silver | Feito |
+| Dicionário de Dados Silver | Feito |
+
+## Fontes de Dados
+
+Três arquivos Excel fornecidos pela Atvos:
+
+- **Inventário part 2** — 50.000 talhões, safras 2021/22
+- **Inventário part 4** — 17.426 talhões, safras 2022/23
+- **Correção de Talhões** — 23.599 pares de unificação/reforma
+
+## Infraestrutura
+
+O projeto roda localmente sem Google Cloud Platform. Alternativas:
+
+| Original | Adotado |
+|----------|---------|
+| BigQuery | **DuckDB** — SQL in-process sobre Parquet |
+| GCS | **Sistema de arquivos local** em `data/` |
+
+## Navegação
+
+Use o menu lateral para acessar a documentação da Sprint 1:
+- **Mapeamento de Fontes** — colunas, chaves, granularidade
+- **Regras de Limpeza** — as 5 categorias de nulos e transformações aplicadas
+- **Dicionário de Dados** — todas as 75 colunas da camada Silver documentadas
+- **Roteiro da Apresentação** — guia para apresentação com FAQ
