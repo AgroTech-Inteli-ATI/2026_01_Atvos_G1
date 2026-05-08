@@ -1,3 +1,8 @@
+---
+title: "Regras de Limpeza"
+sidebar_position: 2
+---
+
 # Regras de Limpeza — Camada Silver
 
 **Documento aprovado em:** 2026-05-07  

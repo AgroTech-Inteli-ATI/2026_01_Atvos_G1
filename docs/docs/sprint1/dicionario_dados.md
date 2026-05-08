@@ -1,3 +1,8 @@
+---
+title: "Dicionário de Dados"
+sidebar_position: 3
+---
+
 # Dicionário de Dados — Camada Silver
 
 **Última atualização:** 2026-05-07  
