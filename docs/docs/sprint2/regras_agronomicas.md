@@ -400,13 +400,18 @@ FUNÇÃO calcular_necessidade_erradicacao(talhao):
 
 | Conceito agronômico | Coluna(s) disponível(is) | Tabela |
 |---|---|---|
-| Data de plantio | `DATA_PLANTIO` | Silver (Inventário) |
+| Data de plantio (cana planta, inverno, ano e meio) | `DATA_PLANTIO` | Silver (Inventário) |
+| Data do último corte (cana soca — data de referência preferida) | `ULT_CORTE` | Silver (Inventário) |
 | Tipo de cana (sistema) | `ESTAGIO` / `CATEGORIA` | Silver (Inventário) |
 | Número de corte | `NO_CORTE` | Silver (Inventário) |
 | Situação do talhão | `SIT_TALHAO` | Silver (Inventário) |
-| Data do último corte | `ULT_CORTE` | Silver (Inventário) |
 | Data de fechamento | `DATA_FECHA` | Silver (Inventário) |
 | Unidade industrial | `UNID_IND` / `DESC_EMPRESA` | Silver (Inventário) |
+
+> **Nota sobre data de referência:** para cana soca, `DATA_PLANTIO` é o plantio original
+> da soqueira, que pode ter vários anos. O ciclo atual começa no último corte (`ULT_CORTE`),
+> portanto essa é a data correta para estimar a próxima colheita. Para os demais sistemas
+> (cana planta, inverno, ano e meio), `DATA_PLANTIO` é a referência adequada.
 
 ### 5.2 Regras extraídas do manual
 
@@ -438,115 +443,98 @@ FUNÇÃO calcular_necessidade_erradicacao(talhao):
 > *"A quantidade necessária de mudas varia entre 10 e 15 toneladas por hectare. Para o plantio em épocas de estiagem é necessário dar preferência para densidade de 15 a 18 gemas por metro."*
 > — Manual, p. 8
 
+**Interpretação técnica:**
+- A janela mai–nov é determinada pelo **clima** do Centro-Sul, não pelo tipo de cana: é o período seco, quando solo e maquinário permitem a colheita sem perdas de sacarose nem compactação excessiva
+- Os diferentes sistemas de plantio têm durações de ciclo distintas — a regra avalia se, dado quando o talhão foi plantado (ou cortado pela última vez) e qual sistema é, a colheita estimada cai dentro dessa janela
+- **Data de referência por sistema:**
+  - Cana soca → `ULT_CORTE`: o ciclo atual começa no último corte, não no plantio original (que pode ter vários anos)
+  - Demais sistemas (cana planta, ano e meio, inverno, cana de ano) → `DATA_PLANTIO`
+  - Se o campo preferido estiver ausente, há fallback para o alternativo com registro na orientação
+- **Verificação da janela:** para sistemas de ciclo variável (ano e meio: 14–22 meses, inverno: 12–16 meses), verifica-se se *algum* mês do intervalo `[data_colheita_min, data_colheita_max]` intercepta mai–nov, evitando falsos negativos. Para ciclos fixos (soca, cana de ano: 12 meses), min == max e o comportamento é equivalente a checar um único mês
+- **Preparo de solo:** 150 dias antes da data de referência (manual, p. 5)
+- **Mudas:** 10–15 t/ha; preferir 15–18 gemas/m em épocas de estiagem
+
+> ⚠️ **Para validação com PO ATVOS:** o TAP menciona uma "Matriz de Aptidão por mês" mais granular que a regra binária mai–nov implementada. A estrutura dessa matriz precisa ser detalhada pela ATVOS antes de substituir a lógica atual.
+
 ### 5.3 Pseudocódigo
 
 ```
 FUNÇÃO calcular_janela_plantio(talhao):
 
-  # Validação de dados obrigatórios
-  SE DATA_PLANTIO for nulo:
-    RETORNAR {
-      orientacao: "SEM_DADO",
-      regra_acionada: "dado_ausente_data_plantio"
-    }
-
-  # Determinar sistema e janela de colheita esperada
-  SE ESTAGIO contém "ano e meio" OU "18":
-    sistema = "cana_ano_e_meio"
+  # 1. Determinar sistema de plantio
+  SE ESTAGIO contém "ano e meio" OU "18m" OU "15m":
+    sistema = "ano_e_meio"
     ciclo_min_meses = 14
     ciclo_max_meses = 22
   SENAO SE ESTAGIO contém "inverno":
-    sistema = "cana_inverno"
+    sistema = "inverno"
     ciclo_min_meses = 12
     ciclo_max_meses = 16
+  SENAO SE ESTAGIO contém "ano" (sem "meio"):
+    sistema = "ano"
+    ciclo_min_meses = 12
+    ciclo_max_meses = 12
   SENAO:
-    sistema = "cana_ano"
+    sistema = "soca"  # cortes numerados e demais
     ciclo_min_meses = 12
     ciclo_max_meses = 12
 
-  # Calcular janela de colheita esperada
-  data_colheita_min = DATA_PLANTIO + ciclo_min_meses
-  data_colheita_max = DATA_PLANTIO + ciclo_max_meses
+  # 2. Escolher data de referência correta
+  # Soca: ULT_CORTE — o ciclo atual inicia no último corte, não no plantio original
+  # Demais: DATA_PLANTIO
+  SE sistema == "soca":
+    data_ref = ULT_CORTE
+  SENAO:
+    data_ref = DATA_PLANTIO
 
-  # Verificar se colheita cai dentro da janela ideal (maio–novembro)
+  # Fallback: se o campo preferido estiver ausente, usar o outro com alerta
+  SE data_ref for nulo:
+    SE campo alternativo disponível:
+      data_ref = campo_alternativo
+      # registrar que foi usado fallback na orientação
+    SENAO:
+      RETORNAR { orientacao: "SEM_DADO", regra_acionada: "dado_ausente_data_referencia" }
+
+  # 3. Calcular janela de colheita esperada
+  data_colheita_min = data_ref + ciclo_min_meses
+  data_colheita_max = data_ref + ciclo_max_meses
+
+  # 4. Verificar se ALGUM mês da janela [min, max] intercepta mai–nov
+  # Para ciclos fixos (soca, ano): min == max → equivale a checar um único mês
+  # Para ciclos variáveis (ano e meio: 14-22m, inverno: 12-16m): evita falsos
+  # negativos quando parte da janela cai dentro do período ideal
   MES_COLHEITA_MIN = 5   # maio
   MES_COLHEITA_MAX = 11  # novembro
 
-  mes_colheita_esperado = mes(data_colheita_min)
+  meses_janela = {mes(d) para d em [data_colheita_min .. data_colheita_max] passo 1 mês}
+  janela_ok = meses_janela ∩ {5, 6, 7, 8, 9, 10, 11} ≠ ∅
 
-  SE mes_colheita_esperado >= MES_COLHEITA_MIN E mes_colheita_esperado <= MES_COLHEITA_MAX:
-    janela_ok = True
-    alerta_janela = "Colheita estimada dentro da janela ideal (mai–nov)."
+  SE janela_ok:
+    alerta_janela = "Colheita estimada dentro da janela ideal (mai–nov). ✓"
+    regra = "janela_dentro_do_ideal"
   SENAO:
-    janela_ok = False
-    alerta_janela = f"ATENÇÃO: Colheita estimada fora da janela ideal (mai–nov). Mês esperado: {mes_colheita_esperado}. Risco de novas brotações comprometidas pelo inverno."
+    alerta_janela = f"ATENÇÃO: colheita estimada fora da janela ideal (mai–nov). Risco de brotações comprometidas pelo inverno."
+    regra = "janela_fora_do_ideal"
 
-  # Data-limite para início do preparo de solo
-  data_inicio_preparo = DATA_PLANTIO - 150 dias
+  # 5. Data de preparo de solo (150 dias antes da data de referência)
+  data_inicio_preparo = data_ref - 150 dias
 
-  # Recomendação de mudas
-  SE sistema == "cana_ano_e_meio":
-    qtd_mudas_txt = "10–15 t/ha de mudas (12–18 gemas/m linear)"
-  SENAO:
-    qtd_mudas_txt = "10–15 t/ha de mudas (mínimo 12 gemas/m linear)"
+  # 6. Mudas recomendadas
+  mudas = area_ha × [10, 15] t/ha  # 10-15 t/ha conforme Manual p. 8
 
   RETORNAR {
-    orientacao: f"Sistema: {sistema}. Janela de colheita estimada: {data_colheita_min.strftime('%b/%Y')} a {data_colheita_max.strftime('%b/%Y')}. {alerta_janela} Início do preparo de solo: {data_inicio_preparo.strftime('%d/%m/%Y')} (150 dias antes do plantio). Mudas: {qtd_mudas_txt}.",
+    orientacao: f"Sistema: {sistema}. Ref.: {campo_ref} ({data_ref}). Janela de colheita estimada: {data_colheita_min} a {data_colheita_max} ({ciclo_min}–{ciclo_max} meses). {alerta_janela} Preparo de solo: {data_inicio_preparo}. Mudas: {mudas_min}–{mudas_max} t.",
     valor_calculado: ciclo_min_meses,
     unidade: "meses_ciclo",
-    regra_acionada: "janela_ok" SE janela_ok SENAO "janela_fora_do_ideal",
-    data_colheita_estimada_inicio: data_colheita_min,
-    data_colheita_estimada_fim: data_colheita_max,
-    data_preparo_solo: data_inicio_preparo
+    regra_acionada: regra,
+    data_colheita_min: data_colheita_min,
+    data_colheita_max: data_colheita_max,
+    data_preparo_solo: data_inicio_preparo,
+    flag_aguardando_validacao_po: True  # Matriz de Aptidão aguarda PO
   }
 ```
 
 ---
 
-## 6. Mapeamento de Colunas Silver ↔ Análise de Solo
-
-Para que o `pipeline_gold.py` funcione, os dois DataFrames precisam ser cruzados. A chave de junção é:
-
-```
-Silver.CHAVESIG  ←→  Solo.FST
-```
-
-**Formato de CHAVESIG:** `"110133-1-6"` (Fazenda-Setor-Talhão)
-**Formato de FST:** `"320110-1-11"` (mesmo padrão: Fazenda-Setor-Talhão)
-
-**Joins necessários:**
-1. Inventário Silver (4 partes) → `pd.concat` → DataFrame unificado
-2. DataFrame unificado ↔ `Dados_analise_solo.csv` via `CHAVESIG == FST`
-3. Resultado: um DataFrame com dados de talhão + análise de solo para cada registro
-
----
-
-## 7. Tabela Resumo: Processos × Dados Necessários
-
-| Processo | Dado crítico | Fonte | Disponível? |
-|---|---|---|---|
-| Calagem | `V1`, `CTC1`, `mg1` | Solo | ✅ |
-| Calagem | `CATEGORIA` | Silver | ✅ |
-| Gessagem | `ca2`, `al2`, `sb2` | Solo (subsolo) | ✅ |
-| Gessagem | `DE_TP_SOLO` | Silver | ✅ (textual, precisa conversão) |
-| Fosfatagem | `p1` | Solo | ✅ |
-| Fosfatagem | `TCH_PROD` | Silver | ✅ (imputado quando nulo) |
-| Erradicação | `TCH_PROD`, `NO_CORTE` | Silver | ✅ |
-| Janela de Plantio | `DATA_PLANTIO`, `ESTAGIO` | Silver | ✅ |
-
----
-
-## 8. Pontos para Validação com o PO ATVOS
-
-Antes de implementar a Task 2.3, os seguintes itens precisam de validação:
-
-1. **Calagem:** A ATVOS usa V% alvo = 60% ou adota outro valor?
-2. **Gessagem:** O dicionário de conversão textura → argila (g/kg) está correto para as condições da ATVOS?
-3. **Fosfatagem:** Quais são os limiares críticos de P que a ATVOS adota por textura? O Boletim 100/IAC é a referência?
-4. **Erradicação:** TCH < 55 t/ha como limiar de reforma — a ATVOS usa este valor ou tem um específico por unidade/variedade?
-5. **Janela de Plantio:** A ATVOS opera exclusivamente no Centro-Sul (janela abr–nov) ou tem unidades no Norte-Nordeste?
-6. **Chave de join:** Confirmar que `CHAVESIG == FST` é a chave correta e que não há variações de formatação entre os datasets.
-
----
-
-*Documento gerado em: 2026-05-21 | Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022)*
+*Documento gerado em: 2026-05-21 | Atualizado em: 2026-05-22 (correção janela_plantio: ULT_CORTE para soca + verificação janela completa [min, max])*
+*Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022) + TAP AgroTech ATVOS*
