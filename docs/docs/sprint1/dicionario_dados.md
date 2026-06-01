@@ -70,7 +70,7 @@ sidebar_position: 3
 | Coluna | Descrição | Tipo | Unidade | Faixa esperada | Fonte original |
 |--------|-----------|------|---------|----------------|----------------|
 | `AREA_HA` | Área total do talhão | float64 | ha | > 0 | Inventario_atvos_21_27_part_*.xlsx |
-| `AREA_DANO` | Área danificada | float64 | ha | >= 0, <= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
+| `AREA_DANO` | Área danificada | float64 | ha | >= 0, &lt;= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
 | `DE_OCUP` | Descrição da ocupação | str | — | "Cana de Açúcar" | Inventario_atvos_21_27_part_*.xlsx |
 | `DE_TP_SOLO` | Tipo de solo | str | — | Texto livre, ex: "Latossolo..." | Inventario_atvos_21_27_part_*.xlsx |
 | `AMBIENTE` | Código do ambiente de produção | str | — | Letra única: A–G | Inventario_atvos_21_27_part_*.xlsx |
@@ -115,7 +115,7 @@ sidebar_position: 3
 
 | Coluna | Descrição | Tipo | Unidade | Faixa esperada | Fonte original |
 |--------|-----------|------|---------|----------------|----------------|
-| `AREA_PROD` | Área de produção estimada | float64 | ha | > 0, <= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
+| `AREA_PROD` | Área de produção estimada | float64 | ha | > 0, &lt;= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
 | `TCH_PROD` | Toneladas de cana por hectare estimadas | float64 | t/ha | 20 – 150 | Inventario_atvos_21_27_part_*.xlsx |
 | `TON_ESTIM` | Toneladas totais estimadas (AREA_PROD x TCH_PROD) | float64 | t | > 0 | Inventario_atvos_21_27_part_*.xlsx |
 
@@ -139,7 +139,7 @@ sidebar_position: 3
 
 | Coluna | Descrição | Tipo | Unidade | Faixa esperada | Fonte original |
 |--------|-----------|------|---------|----------------|----------------|
-| `AREA_COLHIDA` | Área efetivamente colhida | float64 | ha | > 0, <= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
+| `AREA_COLHIDA` | Área efetivamente colhida | float64 | ha | > 0, &lt;= AREA_HA | Inventario_atvos_21_27_part_*.xlsx |
 | `OBJETIVO` | Objetivo do talhão na safra | str | — | "Safra", "Muda", "Sem Objetivo" | Inventario_atvos_21_27_part_*.xlsx |
 | `SIT_TALHAO` | Situação atual do talhão | str | — | "Fechado", "Cana Planta", etc. | Inventario_atvos_21_27_part_*.xlsx |
 | `DATA_FECHA` | Data de fechamento do ciclo | datetime64 | — | >= 2018 | Inventario_atvos_21_27_part_*.xlsx |
