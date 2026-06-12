@@ -1,161 +1,175 @@
 """
-Módulo de regras agronômicas: Gessagem
-========================================
-Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022), p. 6.
+src/rules/gessagem.py
+Regra de gessagem (aplicação de gesso agrícola) para cana-de-açúcar.
 
-Regra central (ambos os critérios devem ser verdadeiros):
-  1. Ca no subsolo (25-50 cm) < 4 mmolc dm-³
-  2. Saturação por Al (m%) no subsolo > 40%
-     Fórmula: m% = Al / (SB + Al) × 100
-     Fonte da fórmula: padrão da química do solo brasileira
-     (Embrapa / IAC — não consta explicitamente no manual Agroadvance)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSEUDOCÓDIGO (validar com PO Atvos antes de alterar limiares)
 
-  Dose: argila (g/kg) × 5 = kg/ha de gesso agrícola
-  Timing: 60-90 dias antes do plantio, na passagem da grade niveladora.
+  ENTRADAS NECESSÁRIAS:
+    saturacao_al : Saturação por Al³⁺ (%) — análise de solo, não na Silver ainda
+    ctc          : CTC a pH 7 (mmol_c/dm³) — análise de solo, não na Silver ainda
+    desc_ambiente: textura do solo (disponível na Silver como DESC_AMBIENTE)
+    categoria    : CATEGORIA Silver
 
-Parâmetros pendentes de validação pelo PO ATVOS:
-  - Dicionário de conversão DE_TP_SOLO → argila (g/kg)
-  - Critérios de disparo (Ca < 4 e m% > 40) estão no manual Agroadvance
+  SE desc_ambiente é nulo E saturacao_al é nulo → SEM_DADO
+
+  CRITÉRIO PRINCIPAL (saturação por Al — quando disponível):
+    SE saturacao_al > 20% E textura != "arenoso":
+      dose = _calcular_dose_gesso(ctc, textura)
+      → "Gessagem recomendada: X t/ha ..."
+    SE saturacao_al <= 20%:
+      → "Gessagem não indicada (Al³⁺ dentro do limite)"
+
+  CRITÉRIO ALTERNATIVO (apenas textura — quando análise química indisponível):
+    SE textura == "muito_argiloso":
+      → "Avaliar gessagem: solo muito argiloso, solicitar análise de Al³⁺"
+    SE textura == "argiloso":
+      → "Avaliar gessagem: solo argiloso, solicitar análise de Al³⁺"
+    SE textura == "arenoso":
+      → "Gessagem raramente indicada em solos arenosos (baixa CTC)"
+    SE textura == "medio":
+      → "Avaliar gessagem conforme resultado de Al³⁺"
+
+DOSE DE GESSO (Embrapa — confirmar com PO Atvos):
+  Solo arenoso       : 0.5 × CTC / 10  (t/ha)
+  Solo médio         : 1.0 × CTC / 10
+  Solo argiloso      : 1.5 × CTC / 10
+  Solo muito argiloso: 2.0 × CTC / 10
+  Limite máximo      : 4.0 t/ha
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from __future__ import annotations
+from ._base import (
+    sem_dado, nao_se_aplica, resultado,
+    numerico, texto, classificar_textura,
+)
 
-# ── Constantes ──────────────────────────────────────────────────────────────
-CA_CRITICO_SUBSOLO = 4.0    # mmolc dm-³  (manual Agroadvance, p.6)
-M_PERCENT_CRITICO = 40.0    # % saturação por Al  (manual Agroadvance, p.6)
-FATOR_DOSE = 5.0            # kg gesso / (g argila / kg solo)
+# ── PARÂMETROS ────────────────────────────────────────────────────────────────
+
+SAT_AL_CRITICA  = 20.0   # % de saturação por Al³⁺ que dispara gessagem
+DOSE_MAX_T_HA   = 4.0    # limite de segurança por aplicação (t/ha)
+
+# Multiplicador de dose por classe de textura (fator × CTC / 10)
+_FATOR_TEXTURA = {
+    "arenoso":       0.5,
+    "medio":         1.0,
+    "argiloso":      1.5,
+    "muito_argiloso": 2.0,
+}
 
 
-def _argila_por_textura(de_tp_solo: str) -> tuple[float, bool]:
+# ── CÁLCULO DE DOSE ───────────────────────────────────────────────────────────
+
+def _calcular_dose_gesso(ctc: float, textura: str) -> float:
     """
-    Converte a descrição textual do solo (DE_TP_SOLO) em teor estimado de argila (g/kg).
+    Dose de gesso em t/ha baseada em CTC e textura do solo (Embrapa).
 
-    Lógica: matching por palavras-chave em ordem de especificidade.
-    Flag de incerteza = True quando a descrição não se encaixa em nenhum padrão.
-
-    AGUARDA VALIDACAO PO: valores de argila por classe textural.
-
-    Retorno
-    -------
-    (argila_g_kg: float, flag_incerteza: bool)
-    """
-    s = str(de_tp_solo).lower()
-
-    if "muito argilosa" in s:
-        return 500.0, False
-    elif "media argilosa" in s or "média argilosa" in s or "media-argilosa" in s:
-        return 250.0, False
-    elif "argilosa" in s:
-        return 350.0, False
-    elif "media arenosa" in s or "média arenosa" in s or "media-arenosa" in s:
-        return 150.0, False
-    elif "muito arenosa" in s:
-        return 80.0, False
-    elif "arenosa" in s:
-        return 100.0, False
-    else:
-        return 200.0, True   # fallback com flag de incerteza
-
-
-def _calcular_m_percent(al2: float, sb2: float) -> float | None:
-    """
-    Calcula a saturação por alumínio (m%) no subsolo.
-
-    Fórmula: m% = Al / (SB + Al) × 100
-    Fonte: padrão da química do solo brasileira (Embrapa/IAC).
-
-    Retorna None se denominador for zero.
-    """
-    denominador = float(sb2) + float(al2)
-    if denominador == 0:
-        return None
-    return (float(al2) / denominador) * 100.0
-
-
-def calcular_gessagem(row: dict) -> dict:
-    """
-    Calcula a necessidade de gessagem para um talhão.
-
-    Parâmetros
+    Parameters
     ----------
-    row : dict
-        Linha do DataFrame enriquecido (Silver + Solo). Campos utilizados:
-        - ca2        : float — cálcio no subsolo 25-50 cm (mmolc dm-³)
-        - al2        : float — alumínio trocável no subsolo 25-50 cm (mmolc dm-³)
-        - sb2        : float — soma de bases no subsolo 25-50 cm (mmolc dm-³)
-        - DE_TP_SOLO : str   — descrição textual do tipo de solo
-
-    Retorno
-    -------
-    dict com chaves:
-        processo, orientacao, valor_calculado, unidade_medida,
-        regra_acionada, flag_aguardando_validacao_po
+    ctc     : CTC a pH 7 em mmol_c/dm³
+    textura : "arenoso" | "medio" | "argiloso" | "muito_argiloso"
     """
-    base = {"processo": "gessagem"}
+    fator = _FATOR_TEXTURA.get(textura, 1.0)
+    dose = fator * ctc / 10
+    return min(dose, DOSE_MAX_T_HA)
 
-    # Validação de dados obrigatórios
-    ca2 = row.get("ca2")
-    al2 = row.get("al2")
-    sb2 = row.get("sb2")
 
-    if any(v is None or (isinstance(v, float) and v != v) for v in [ca2, al2, sb2]):
-        return {**base,
-                "orientacao": "SEM_DADO: análise de subsolo ausente (ca2, al2 ou sb2 nulos).",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "dado_ausente_analise_subsolo",
-                "flag_aguardando_validacao_po": False}
+# ── REGRA PRINCIPAL ───────────────────────────────────────────────────────────
 
-    # Calcular m%
-    m_percent = _calcular_m_percent(al2, sb2)
-    if m_percent is None:
-        return {**base,
-                "orientacao": "SEM_DADO: SB + Al = 0 no subsolo (dado suspeito).",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "dado_suspeito_sb_al_zero",
-                "flag_aguardando_validacao_po": False}
+def calcular_necessidade_gessagem(talhao: dict) -> dict:
+    """
+    Avalia a necessidade de gessagem para um talhão de cana-de-açúcar.
 
-    # Verificar critérios de disparo (ambos devem ser verdadeiros)
-    criterio_ca = float(ca2) < CA_CRITICO_SUBSOLO
-    criterio_al = m_percent > M_PERCENT_CRITICO
+    Usa saturação por Al³⁺ quando disponível; quando ausente, orienta com base
+    na textura do solo (DESC_AMBIENTE da Silver) e solicita análise química.
 
-    if not (criterio_ca and criterio_al):
-        motivo = []
-        if not criterio_ca:
-            motivo.append(f"Ca subsolo={ca2:.1f} ≥ {CA_CRITICO_SUBSOLO} mmolc dm-³")
-        if not criterio_al:
-            motivo.append(f"m%={m_percent:.1f}% ≤ {M_PERCENT_CRITICO}%")
+    Parameters
+    ----------
+    talhao : dict
+        Campos de análise de solo (não disponíveis na Silver ainda):
+          saturacao_al (float) saturação por Al³⁺, %, ex: 25.0
+          ctc          (float) CTC a pH 7, mmol_c/dm³, ex: 70.0
+        Campo disponível na Silver:
+          desc_ambiente (str) textura do solo, ex: "Argiloso"
 
-        return {**base,
-                "orientacao": (f"Gessagem não indicada. {'; '.join(motivo)}. "
-                               f"Ambos os critérios (Ca < {CA_CRITICO_SUBSOLO} E m% > {M_PERCENT_CRITICO}%) "
-                               "são necessários."),
-                "valor_calculado": 0.0,
-                "unidade_medida": "kg/ha",
-                "regra_acionada": "gessagem_nao_necessaria",
-                "flag_aguardando_validacao_po": False}
+    Returns
+    -------
+    dict com orientacao, valor_calculado (t/ha ou None), regra_acionada
 
-    # Calcular dose com base na textura
-    de_tp_solo = row.get("DE_TP_SOLO", "")
-    argila_g_kg, flag_incerteza = _argila_por_textura(de_tp_solo)
-    dose_gesso = argila_g_kg * FATOR_DOSE  # kg/ha
+    Examples
+    --------
+    >>> calcular_necessidade_gessagem({
+    ...     'saturacao_al': 28.0, 'ctc': 70.0,
+    ...     'desc_ambiente': 'Argiloso'
+    ... })
+    {'orientacao': 'Gessagem recomendada: aplicar 1.0 t/ha (Al³⁺ 28.0% > 20%, solo argiloso)',
+     'valor_calculado': 1.0,
+     'regra_acionada': 'al_alto_gessagem_indicada'}
 
-    aviso_incerteza = (
-        " [ATENÇÃO: textura não identificada — argila estimada como 200 g/kg (mediana). "
-        "Aguarda validação PO.]" if flag_incerteza else ""
+    >>> calcular_necessidade_gessagem({'desc_ambiente': 'Argiloso'})
+    {'orientacao': 'Avaliar gessagem: solo argiloso — solicitar análise de Al³⁺',
+     'valor_calculado': None,
+     'regra_acionada': 'textura_argiloso_sem_analise_al'}
+    """
+    sat_al  = talhao.get("saturacao_al")
+    ctc     = talhao.get("ctc")
+    desc_amb = talhao.get("desc_ambiente")
+
+    textura = classificar_textura(desc_amb)
+
+    # ── caminho com análise química completa ──────────────────────────────────
+    if numerico(sat_al):
+        sat_al = float(sat_al)
+
+        if sat_al > SAT_AL_CRITICA:
+            if not numerico(ctc):
+                # Sabe que precisa gessagem, mas não consegue calcular dose
+                return resultado(
+                    f"Gessagem indicada (Al³⁺ {sat_al:.1f}% > {SAT_AL_CRITICA}%) "
+                    f"— CTC ausente, dose a calcular",
+                    None,
+                    "al_alto_ctc_ausente",
+                )
+            dose = _calcular_dose_gesso(float(ctc), textura or "medio")
+            txt = textura.replace("_", " ") if textura else "textura indefinida"
+            return resultado(
+                f"Gessagem recomendada: aplicar {dose:.1f} t/ha "
+                f"(Al³⁺ {sat_al:.1f}% > {SAT_AL_CRITICA}%, solo {txt})",
+                dose,
+                "al_alto_gessagem_indicada",
+            )
+
+        return resultado(
+            f"Gessagem não indicada (Al³⁺ {sat_al:.1f}% ≤ {SAT_AL_CRITICA}%)",
+            0.0,
+            "al_dentro_limite",
+        )
+
+    # ── caminho apenas com textura (sem análise química) ─────────────────────
+    if textura is None:
+        return sem_dado("saturacao_al_e_desc_ambiente")
+
+    _mensagens = {
+        "arenoso":       "Gessagem raramente indicada em solos arenosos (baixa CTC) — confirmar com análise",
+        "medio":         "Avaliar gessagem: solo de textura média — solicitar análise de Al³⁺",
+        "argiloso":      "Avaliar gessagem: solo argiloso — solicitar análise de Al³⁺",
+        "muito_argiloso": "Avaliar gessagem: solo muito argiloso — solicitar análise de Al³⁺ (alta prioridade)",
+    }
+    return resultado(
+        _mensagens[textura],
+        None,
+        f"textura_{textura}_sem_analise_al",
     )
 
-    orientacao = (
-        f"Aplicar {dose_gesso:.0f} kg/ha de gesso agrícola na grade niveladora "
-        f"(60-90 dias antes do plantio). "
-        f"Ca subsolo={ca2:.1f} mmolc dm-³, m%={m_percent:.1f}%, "
-        f"argila estimada={argila_g_kg:.0f} g/kg.{aviso_incerteza}"
-    )
 
-    return {**base,
-            "orientacao": orientacao,
-            "valor_calculado": round(dose_gesso, 0),
-            "unidade_medida": "kg/ha",
-            "regra_acionada": "gessagem_necessaria",
-            "flag_aguardando_validacao_po": True}   # dicionário argila aguarda PO
+if __name__ == "__main__":
+    casos = [
+        {"saturacao_al": 28.0, "ctc": 70.0, "desc_ambiente": "Argiloso"},
+        {"saturacao_al": 12.0, "ctc": 70.0, "desc_ambiente": "Argiloso"},
+        {"desc_ambiente": "Muito Argiloso"},
+        {"desc_ambiente": "Arenoso"},
+        {},
+    ]
+    for c in casos:
+        r = calcular_necessidade_gessagem(c)
+        print(f"{r['regra_acionada']:<45} | {r['orientacao']}")

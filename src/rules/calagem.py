@@ -1,131 +1,191 @@
 """
-Módulo de regras agronômicas: Calagem
-======================================
-Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022), p. 6 e 10.
+src/rules/calagem.py
+Regra de calagem (correção de pH) para cana-de-açúcar.
 
-Regra central:
-  Aplicar calcário para elevar a saturação por bases (V%) a 60%.
-  Fórmula: NC (t/ha) = (V_alvo - V_atual) × CTC / 100
-  Se Mg < 5 mmolc dm-³: usar calcário dolomítico, mínimo 1 t/ha.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSEUDOCÓDIGO (validar com PO Atvos antes de alterar limiares)
 
-  - Cana Planta: aplicação incorporada, 150 dias antes do plantio
-    (3/4 antes do arado + 1/4 antes da grade niveladora)
-  - Demais categorias: aplicação superficial, dose reduzida a 50%
-    (sem incorporação: menor eficiência)
+  ENTRADAS NECESSÁRIAS (análise de solo — ainda não na Silver):
+    ph_solo   : pH em água
+    ctc       : Capacidade de Troca Catiônica (mmol_c/dm³)
+    v_atual   : Saturação de bases atual (%)
+    v_alvo    : Saturação de bases alvo (%)  ← definido pelo agrônomo Atvos
+    categoria : CATEGORIA da Silver ("Formação", "Cana Soca", ...)
 
-Parâmetros pendentes de validação pelo PO ATVOS:
-  - V_ALVO = 60% (padrão do setor; ATVOS pode adotar valor diferente)
+  SE qualquer entrada for nula → SEM_DADO
+
+  SE ph_solo >= 6.0:
+    → sem necessidade de calagem
+    → dose = 0, regra = "ph_adequado"
+
+  SE ph_solo >= 5.5 E ph_solo < 6.0:
+    → dose baixa, preventiva
+    → dose = _calcular_dose(ctc, v_atual, v_alvo) * 0.5
+    → tipo = "superficial"
+    → regra = "ph_levemente_acido"
+
+  SE ph_solo < 5.5 E ciclo == "cana_planta":
+    → dose plena, incorporada (solo mobilizado no plantio)
+    → dose = _calcular_dose(ctc, v_atual, v_alvo)
+    → tipo = "incorporada"
+    → regra = "ph_baixo_cana_planta"
+
+  SE ph_solo < 5.5 E ciclo == "cana_soca":
+    → dose reduzida, superficial (solo não mobilizado)
+    → dose = _calcular_dose(ctc, v_atual, v_alvo) * 0.5
+    → tipo = "superficial"
+    → regra = "ph_baixo_cana_soca"
+
+FÓRMULA DE DOSE (método da saturação de bases — Embrapa/IAC):
+  NC (t/ha) = [(V_alvo - V_atual) × CTC] / (PRNT × 10)
+  CTC em mmolc/dm³ (ex: 80). Se a fonte usar cmolc/dm³, divisor muda para PRNT.
+  PRNT = 80 (calcário dolomítico padrão Atvos — confirmar com PO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from __future__ import annotations
+from ._base import sem_dado, nao_se_aplica, resultado, numerico, texto, ciclo_do_talhao
 
-# ── Constantes ──────────────────────────────────────────────────────────────
-V_ALVO = 60.0           # % saturação por bases alvo  [AGUARDA VALIDACAO PO]
-MG_MINIMO = 5.0         # mmolc dm-³ — limiar para obrigatoriedade do dolomítico
-DOSE_MINIMA_DOLOMIT = 1.0  # t/ha — mínimo quando Mg abaixo do limiar
-FATOR_SUPERFICIAL = 0.5    # eficiência relativa sem incorporação (cana soca)
-ANTECEDENCIA_PLANTA = 150  # dias antes do plantio (cana planta)
-ANTECEDENCIA_SOCA = 60    # dias antes da operação (cana soca)
+# ── PARÂMETROS (ajustar após validação com PO Atvos) ─────────────────────────
 
-CATEGORIAS_CANA_PLANTA = {"Cana Planta"}
-CATEGORIAS_INAPTAS = {"Em Reforma", "Pousio", "A Definir", "Passagem", "Formação"}
+PH_ADEQUADO    = 6.0    # pH acima deste valor: sem necessidade de calagem
+PH_CRITICO     = 5.5    # pH abaixo deste valor: calagem necessária
+PRNT_PADRAO    = 80.0   # PRNT do calcário padrão Atvos (%)
+V_ALVO_PADRAO  = 60.0   # Saturação de bases alvo (%) — confirmar com PO
+DOSE_MAX_T_HA  = 6.0    # Limite máximo por aplicação (t/ha) — segurança
 
 
-def calcular_calagem(row: dict) -> dict:
+# ── CÁLCULO DE DOSE ───────────────────────────────────────────────────────────
+
+def _calcular_dose(ctc: float, v_atual: float, v_alvo: float) -> float:
     """
-    Calcula a necessidade de calagem para um talhão.
+    Necessidade de calagem pelo método da saturação de bases (Embrapa).
 
-    Parâmetros
+    NC (t/ha) = [(V_alvo - V_atual) × CTC] / (PRNT × 10)
+
+    Parameters
     ----------
-    row : dict
-        Linha do DataFrame enriquecido (Silver + Solo). Campos utilizados:
-        - V1     : float — saturação por bases 0-25 cm (%)
-        - CTC1   : float — capacidade de troca catiônica 0-25 cm (mmolc dm-³)
-        - mg1    : float — magnésio trocável 0-25 cm (mmolc dm-³)
-        - CATEGORIA : str — tipo de ciclo da cana
+    ctc    : CTC a pH 7 em mmolc/dm³ (ex: 80.0)
+    v_atual: saturação de bases atual em % (ex: 35.0)
+    v_alvo : saturação de bases alvo em % (ex: 60.0)
 
-    Retorno
+    Returns
     -------
-    dict com chaves:
-        processo, orientacao, valor_calculado, unidade_medida,
-        regra_acionada, flag_aguardando_validacao_po
+    Dose em t/ha, limitada a DOSE_MAX_T_HA e nunca negativa.
     """
-    base = {"processo": "calagem"}
+    delta_v = max(v_alvo - v_atual, 0)
+    dose = (delta_v * ctc) / (PRNT_PADRAO * 10)
+    return min(dose, DOSE_MAX_T_HA)
 
-    categoria = str(row.get("CATEGORIA", "")).strip()
 
-    # Talhões em situação não elegível
-    if categoria in CATEGORIAS_INAPTAS:
-        return {**base,
-                "orientacao": f"Talhão com categoria '{categoria}': calagem não aplicável.",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "calagem_nao_aplicavel",
-                "flag_aguardando_validacao_po": False}
+# ── REGRA PRINCIPAL ───────────────────────────────────────────────────────────
 
-    # Validação de dados obrigatórios
-    v1 = row.get("V1")
-    ctc1 = row.get("CTC1")
-    mg1 = row.get("mg1")
+def calcular_necessidade_calagem(talhao: dict) -> dict:
+    """
+    Avalia a necessidade de calagem para um talhão de cana-de-açúcar.
 
-    if any(v is None or (isinstance(v, float) and v != v) for v in [v1, ctc1, mg1]):
-        return {**base,
-                "orientacao": "SEM_DADO: análise de solo ausente (V1, CTC1 ou mg1 nulos).",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "dado_ausente_analise_solo",
-                "flag_aguardando_validacao_po": False}
+    Parameters
+    ----------
+    talhao : dict
+        Campos obrigatórios (análise de solo — ainda não disponíveis na Silver):
+          ph_solo  (float) pH em água, ex: 5.2
+          ctc      (float) CTC a pH 7, mmol_c/dm³, ex: 80.0
+          v_atual  (float) saturação de bases atual, %, ex: 35.0
+          v_alvo   (float) saturação de bases alvo, %, ex: 60.0
+        Campo da Silver:
+          categoria (str) "Formação" | "Cana Soca" | etc.
 
-    if v1 <= 0 or ctc1 <= 0:
-        return {**base,
-                "orientacao": "SEM_DADO: valores de V% ou CTC suspeitos (≤ 0).",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "dado_suspeito_v_ctc",
-                "flag_aguardando_validacao_po": False}
+    Returns
+    -------
+    dict com:
+      orientacao       : texto descritivo da recomendação
+      valor_calculado  : dose de calcário em t/ha (ou None)
+      regra_acionada   : código da condição disparada
 
-    # Calcular necessidade de calagem (NC)
-    nc = (V_ALVO - float(v1)) * float(ctc1) / 100.0
+    Examples
+    --------
+    >>> calcular_necessidade_calagem({
+    ...     'ph_solo': 4.8, 'ctc': 80.0,
+    ...     'v_atual': 35.0, 'v_alvo': 60.0,
+    ...     'categoria': 'Formação'
+    ... })
+    {'orientacao': 'Calagem incorporada: aplicar 2.0 t/ha de calcário (pH 4.8, cana-planta)',
+     'valor_calculado': 2.0,
+     'regra_acionada': 'ph_baixo_cana_planta'}
+    """
+    ph     = talhao.get("ph_solo")
+    ctc    = talhao.get("ctc")
+    v_at   = talhao.get("v_atual")
+    v_alvo = talhao.get("v_alvo") or V_ALVO_PADRAO
+    cat    = talhao.get("categoria")
 
-    if nc <= 0:
-        return {**base,
-                "orientacao": (f"Solo com V%={v1:.1f}% já acima do alvo ({V_ALVO}%). "
-                               "Calagem não necessária."),
-                "valor_calculado": 0.0,
-                "unidade_medida": "t/ha",
-                "regra_acionada": "v_percent_adequado",
-                "flag_aguardando_validacao_po": True}   # V_ALVO aguarda validação
+    # ── validação de entradas ──────────────────────────────────────────────────
+    if not numerico(ph):
+        return sem_dado("ph_solo")
+    if not numerico(ctc):
+        return sem_dado("ctc")
+    if not numerico(v_at):
+        return sem_dado("v_atual")
 
-    # Tipo de calcário
-    if float(mg1) < MG_MINIMO:
-        tipo_calcario = "dolomítico"
-        nc = max(nc, DOSE_MINIMA_DOLOMIT)
-    else:
-        tipo_calcario = "calcítico ou dolomítico"
+    ph   = float(ph)
+    ctc  = float(ctc)
+    v_at = float(v_at)
 
-    # Modo de aplicação por categoria
-    if categoria in CATEGORIAS_CANA_PLANTA:
-        tipo_aplicacao = "incorporada"
-        parcelamento = "3/4 antes do arado + 1/4 antes da grade niveladora"
-        antecedencia = ANTECEDENCIA_PLANTA
-        regra = "calagem_incorporada"
-    else:
-        tipo_aplicacao = "superficial"
-        nc = nc * FATOR_SUPERFICIAL
-        parcelamento = "dose única em superfície"
-        antecedencia = ANTECEDENCIA_SOCA
-        regra = "calagem_superficial"
+    ciclo = ciclo_do_talhao(cat)  # "cana_planta" | "cana_soca" | None
 
-    orientacao = (
-        f"Aplicar {nc:.2f} t/ha de calcário {tipo_calcario} ({tipo_aplicacao}). "
-        f"{parcelamento}. "
-        f"Realizar {antecedencia} dias antes do plantio/operação. "
-        f"[V% atual={v1:.1f}%, alvo={V_ALVO}%, CTC={ctc1:.0f} mmolc dm-³]"
+    # ── árvore de decisão ─────────────────────────────────────────────────────
+    if ph >= PH_ADEQUADO:
+        return resultado(
+            f"Sem necessidade de calagem (pH {ph:.1f} ≥ {PH_ADEQUADO})",
+            0.0,
+            "ph_adequado",
+        )
+
+    dose = _calcular_dose(ctc, v_at, float(v_alvo))
+
+    if ph >= PH_CRITICO:
+        dose_prev = round(dose * 0.5, 2)
+        return resultado(
+            f"Calagem preventiva superficial: aplicar {dose_prev:.1f} t/ha "
+            f"(pH {ph:.1f}, levemente ácido — dose reduzida, preventiva)",
+            dose_prev,
+            "ph_levemente_acido",
+        )
+
+    # pH < 5.5 — calagem necessária, modo varia com o ciclo
+    if ciclo == "cana_planta":
+        return resultado(
+            f"Calagem incorporada: aplicar {dose:.1f} t/ha de calcário "
+            f"(pH {ph:.1f}, cana-planta)",
+            dose,
+            "ph_baixo_cana_planta",
+        )
+
+    if ciclo == "cana_soca":
+        dose_soca = round(dose * 0.5, 2)
+        return resultado(
+            f"Calagem superficial: aplicar {dose_soca:.1f} t/ha de calcário "
+            f"(pH {ph:.1f}, cana-soca — dose reduzida)",
+            dose_soca,
+            "ph_baixo_cana_soca",
+        )
+
+    # Ciclo desconhecido mas pH crítico — ainda recomenda, ciclo indefinido
+    return resultado(
+        f"Calagem necessária: {dose:.1f} t/ha (pH {ph:.1f}) — confirmar ciclo para definir modo",
+        dose,
+        "ph_baixo_ciclo_indefinido",
     )
 
-    return {**base,
-            "orientacao": orientacao,
-            "valor_calculado": round(nc, 2),
-            "unidade_medida": "t/ha",
-            "regra_acionada": regra,
-            "flag_aguardando_validacao_po": True}   # V_ALVO aguarda validação PO
+
+# ── EXEMPLO DE USO (rodar: python -m src.rules.calagem) ──────────────────────
+
+if __name__ == "__main__":
+    casos = [
+        {"ph_solo": 4.8, "ctc": 80.0, "v_atual": 35.0, "v_alvo": 60.0, "categoria": "Formação"},
+        {"ph_solo": 5.3, "ctc": 60.0, "v_atual": 42.0, "v_alvo": 60.0, "categoria": "Cana Soca"},
+        {"ph_solo": 6.2, "ctc": 70.0, "v_atual": 65.0, "v_alvo": 60.0, "categoria": "Cana Soca"},
+        {"ph_solo": None, "ctc": 80.0, "v_atual": 35.0, "v_alvo": 60.0, "categoria": "Formação"},
+    ]
+    for c in casos:
+        r = calcular_necessidade_calagem(c)
+        print(f"pH={c.get('ph_solo')} | {r['regra_acionada']} | {r['orientacao']}")

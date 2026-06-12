@@ -1,193 +1,296 @@
 """
-Pipeline Gold — Motor de Orientações Agronômicas
-=================================================
-Sprint 2 | AgroTech Inteli + ATVOS
-
-Executa 4 passos em sequência:
-
-  Passo 1 — Unificar Silver
-    Concatena os 4 parquets do inventário Silver.
-    Saída: data/processed/inventario_silver_unificado.parquet
-
-  Passo 2 — Aplicar tabela de correção de talhões
-    Remapeia CHAVEs reformadas para os identificadores atuais.
-    Saída: data/processed/inventario_silver_corrigido.parquet
-
-  Passo 3 — Join com análise de solo
-    Left join via CHAVE == FST.
-    Saída: data/processed/inventario_silver_enriquecido.parquet
-
-  Passo 4 — Aplicar regras e gerar Gold (formato wide)
-    Uma linha por talhão, colunas por processo.
-    Por padrão processa uma amostra representativa (N_POR_UNIDADE por unidade industrial).
-    Saída: data/gold/amostra_gold_YYYY-MM-DD.parquet/.csv
+src/pipeline_gold.py
+Pipeline Silver → Gold: aplica o motor de regras e gera orientações por talhão.
 
 Uso:
-    python src/pipeline_gold.py              # amostra (padrão)
-    python src/pipeline_gold.py --todos      # todos os talhões com solo
+    python src/pipeline_gold.py              # processa todos os arquivos Silver
+    python src/pipeline_gold.py --dry-run    # mostra o que processaria, sem salvar
 """
 
+import os
 import sys
-import argparse
-from pathlib import Path
-from datetime import date
-
+import glob
 import pandas as pd
+from datetime import datetime, date
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+from rules import REGRAS
 
-from src.rules.calagem        import calcular_calagem
-from src.rules.gessagem       import calcular_gessagem
-from src.rules.fosfatagem     import calcular_fosfatagem
-from src.rules.erradicacao    import calcular_erradicacao
-from src.rules.janela_plantio import calcular_janela_plantio
+# ── CONFIGURAÇÃO ──────────────────────────────────────────────────────────────
 
-DATA_PROCESSED = ROOT / "data" / "processed"
-DATA_GOLD      = ROOT / "data" / "gold"
-DATA_GOLD.mkdir(parents=True, exist_ok=True)
+SILVER_PATH      = "data/processed"
+GOLD_PATH        = "data/gold"
+SILVER_COM_SAFRA = os.path.join(SILVER_PATH, "silver_com_safra.parquet")
 
-N_POR_UNIDADE = 30   # talhões por unidade industrial na amostra
-
-REGRAS = [
-    ("calagem",        calcular_calagem,
-     ["orientacao", "valor_calculado", "regra_acionada", "flag_aguardando_validacao_po"]),
-    ("gessagem",       calcular_gessagem,
-     ["orientacao", "valor_calculado", "regra_acionada", "flag_aguardando_validacao_po"]),
-    ("fosfatagem",     calcular_fosfatagem,
-     ["orientacao", "valor_calculado", "regra_acionada", "flag_aguardando_validacao_po"]),
-    ("erradicacao",    calcular_erradicacao,
-     ["orientacao", "valor_calculado", "regra_acionada", "flag_aguardando_validacao_po",
-      "prioridade_reforma"]),
-    ("janela_plantio", calcular_janela_plantio,
-     ["orientacao", "valor_calculado", "regra_acionada", "flag_aguardando_validacao_po"]),
-]
-
-COLUNAS_CONTEXTO = [
-    "id_talhao", "SAFRA", "unidade", "CATEGORIA",
-    "NO_CORTE", "TCH_PROD", "AREA_HA", "DE_TP_SOLO", "data_geracao",
+# Colunas obrigatórias no output Gold
+COLUNAS_GOLD = [
+    "id_talhao",
+    "chave",
+    "unidade",
+    "safra",
+    "processo",
+    "orientacao",
+    "valor_calculado",
+    "regra_acionada",
+    "insumo",
+    "dose_kg_ha",
+    "quantidade_total_kg",
+    "data_geracao",
 ]
 
 
-def log(msg: str) -> None:
-    print(f"[pipeline_gold] {msg}", flush=True)
+# ── MAPEAMENTO SILVER → INPUT DAS REGRAS ──────────────────────────────────────
 
+def _preparar_talhao(row: pd.Series) -> dict:
+    """
+    Converte uma linha do DataFrame Silver no dicionário de entrada das regras.
 
-# ── Passo 1 ─────────────────────────────────────────────────────────────────
-def passo1_unificar_silver() -> pd.DataFrame:
-    log("PASSO 1 — Unificando Silver...")
-    arquivos = sorted(DATA_PROCESSED.glob("Inventario_atvos_*_silver.parquet"))
-    if not arquivos:
-        raise FileNotFoundError(f"Nenhum arquivo Silver em {DATA_PROCESSED}")
-    df = pd.concat([pd.read_parquet(a) for a in arquivos], ignore_index=True)
-    log(f"  {len(df):,} linhas × {df.shape[1]} colunas")
-    df.to_parquet(DATA_PROCESSED / "inventario_silver_unificado.parquet", index=False)
-    return df
+    Campos de análise de solo (ph_solo, ctc, etc.) ainda não existem na Silver —
+    ficam como None e dispararão SEM_DADO nas regras que os exigem.
+    Quando esses dados chegarem, adicionar o mapeamento aqui.
 
+    Parameters
+    ----------
+    row : pd.Series
+        Uma linha do DataFrame Silver (Inventario_atvos).
 
-# ── Passo 2 ─────────────────────────────────────────────────────────────────
-def passo2_aplicar_correcao(df: pd.DataFrame) -> pd.DataFrame:
-    log("PASSO 2 — Aplicando correção de talhões...")
-    arq = DATA_PROCESSED / "Correcao_talhoes_para_unificacao_silver.parquet"
-    if not arq.exists():
-        log("  AVISO: arquivo de correção não encontrado. Pulando.")
-        df.to_parquet(DATA_PROCESSED / "inventario_silver_corrigido.parquet", index=False)
-        return df
-    cor = pd.read_parquet(arq)
-    cor["chave_origem"]  = cor["Faz_Origem"].astype(str)  + "-" + cor["Setor_Origem"].astype(str)  + "-" + cor["Talhao_Origem"].astype(str)
-    cor["chave_destino"] = cor["Faz_Destino"].astype(str) + "-" + cor["Setor_Destino"].astype(str) + "-" + cor["Talhao_Destino"].astype(str)
-    mapa = dict(zip(cor["chave_origem"], cor["chave_destino"]))
-    antes = df["CHAVE"].nunique()
-    df["CHAVE"] = df["CHAVE"].map(lambda c: mapa.get(str(c), str(c)))
-    log(f"  CHAVEs únicas: {antes:,} → {df['CHAVE'].nunique():,} | mapeamentos: {len(mapa):,}")
-    df.to_parquet(DATA_PROCESSED / "inventario_silver_corrigido.parquet", index=False)
-    return df
-
-
-# ── Passo 3 ─────────────────────────────────────────────────────────────────
-def passo3_join_solo(df: pd.DataFrame) -> pd.DataFrame:
-    log("PASSO 3 — Join com análise de solo...")
-    solo = pd.read_csv(ROOT / "data" / "Dados_analise_solo.csv", sep=";")
-    solo["FST"] = solo["FST"].astype(str).str.strip()
-    df["CHAVE"]  = df["CHAVE"].astype(str).str.strip()
-    enriquecido = df.merge(solo, left_on="CHAVE", right_on="FST", how="left")
-    com  = enriquecido["FST"].notna().sum()
-    sem  = enriquecido["FST"].isna().sum()
-    log(f"  Com solo: {com:,} ({com/len(enriquecido)*100:.1f}%) | Sem solo: {sem:,} ({sem/len(enriquecido)*100:.1f}%)")
-    enriquecido.to_parquet(DATA_PROCESSED / "inventario_silver_enriquecido.parquet", index=False)
-    return enriquecido
-
-
-# ── Passo 4 ─────────────────────────────────────────────────────────────────
-def _aplicar_regras_linha(row: dict) -> dict:
-    """Chama os 5 módulos de regra para uma linha e retorna colunas wide."""
-    resultado = {
-        "id_talhao":    row.get("CHAVE"),
-        "SAFRA":        row.get("SAFRA"),
-        "unidade":      row.get("UNID_IND"),
-        "CATEGORIA":    row.get("CATEGORIA"),
-        "NO_CORTE":     row.get("NO_CORTE"),
-        "TCH_PROD":     row.get("TCH_PROD"),
-        "AREA_HA":      row.get("AREA_HA"),
-        "DE_TP_SOLO":   row.get("DE_TP_SOLO"),
-        "data_geracao": date.today().isoformat(),
-    }
-    for nome, fn, campos in REGRAS:
+    Returns
+    -------
+    dict com todos os campos esperados pelas funções de regra.
+    """
+    def safe(col):
+        val = row.get(col)
+        if val is None:
+            return None
         try:
-            res = fn(row)
-        except Exception as exc:
-            res = {c: f"ERRO: {exc}" if c == "orientacao" else None for c in campos}
-        for campo in campos:
-            resultado[f"{nome}_{campo}"] = res.get(campo)
-    return resultado
+            if pd.isna(val):
+                return None
+        except (TypeError, ValueError):
+            pass
+        return val
+
+    return {
+        # ── identificação (da Silver) ──────────────────────────────────────────
+        "id_talhao":    safe("CHAVESIG"),
+        "chave":        safe("CHAVE"),
+        "unidade":      safe("DESC_EMPRESA"),
+        "unid_ind":     safe("UNID_IND"),
+        "safra":        safe("SAFRA"),
+
+        # ── cultura e manejo (da Silver) ───────────────────────────────────────
+        "no_corte":     safe("NO_CORTE"),
+        "categoria":    safe("CATEGORIA"),      # "Formação", "Cana Soca", "Muda"
+        "estagio":      safe("ESTAGIO"),
+        "man_hipot":    safe("MAN_HIPOT"),      # "Precoce", "Média", "Tardia"
+        "data_plantio": safe("DATA_PLANTIO"),
+        "tp_reforma":   safe("TP_REFORMA"),
+        "reforma":      safe("Reforma"),        # "S" ou "N"
+        "vinhaca":      safe("Vinhaca_E"),
+        "torta":        safe("TORTA"),
+
+        # ── produção (da Silver) ───────────────────────────────────────────────
+        "tch_prod":     safe("TCH_PROD"),
+        "area_prod":    safe("AREA_PROD"),
+        "ton_estim":    safe("TON_ESTIM"),
+        "area_ha":      safe("AREA_HA"),
+
+        # ── solo — disponível na Silver ────────────────────────────────────────
+        "desc_ambiente": safe("DESC_AMBIENTE"),  # textura: "Argiloso", "Arenoso"...
+        "de_tp_solo":    safe("DE_TP_SOLO"),
+        "ambiente":      safe("AMBIENTE"),        # código A–G
+
+        # ── solo — análise química (NÃO disponível na Silver ainda) ───────────
+        # Adicionar mapeamento quando a fonte de análise de solo for integrada.
+        "ph_solo":       safe("ph_solo"),         # pH em água
+        "ctc":           safe("ctc"),             # CTC mmol_c/dm³
+        "v_atual":       safe("v_atual"),         # saturação de bases atual (%)
+        "v_alvo":        safe("v_alvo"),          # saturação de bases alvo (%)
+        "p_disponivel":  safe("p_disponivel"),    # P Mehlich-1 mg/dm³
+        "saturacao_al":  safe("saturacao_al"),    # saturação por Al³⁺ (%)
+        "ca_cmolc":      safe("ca_cmolc"),        # Ca cmolc/dm³
+        "mg_cmolc":      safe("mg_cmolc"),        # Mg cmolc/dm³
+
+        # ── safra — integrado por extract_safra.py ────────────────────────────
+        "tchan_estimado":  safe("tchan_estimado"),   # estimativa de prod. (t/ha)
+        "safra_estimada":  safe("safra_estimada"),   # True=modelo ATVOS / False=proxy
+
+        # ── campo para cálculo de quantidade total ────────────────────────────
+        # (usado pelo pipeline para calcular quantidade_total_kg = dose × área)
+        "_area_ha":        safe("AREA_HA"),
+    }
 
 
-def passo4_gerar_gold(df: pd.DataFrame, amostra: bool = True) -> pd.DataFrame:
-    log("PASSO 4 — Aplicando regras (formato wide)...")
+# ── APLICAÇÃO DAS REGRAS ──────────────────────────────────────────────────────
 
-    base = df[df["FST"].notna()].copy()   # apenas talhões com análise de solo
+def _aplicar_regras(df: pd.DataFrame, hoje: date) -> pd.DataFrame:
+    """
+    Itera sobre cada talhão e aplica todos os módulos de regra.
 
-    if amostra:
-        subset = (base.groupby("UNID_IND", group_keys=False)
-                      .apply(lambda x: x.sample(min(N_POR_UNIDADE, len(x)), random_state=42),
-                             include_groups=False))
-        log(f"  Amostra: {len(subset):,} talhões ({subset['UNID_IND'].nunique()} unidades)")
-        prefixo = "amostra_gold"
+    Retorna um DataFrame no formato long com uma linha por (talhão × processo).
+    """
+    registros = []
+
+    for _, row in df.iterrows():
+        talhao = _preparar_talhao(row)
+
+        for processo, func_regra in REGRAS.items():
+            try:
+                resultado = func_regra(talhao)
+            except Exception as e:
+                # Nunca deixar uma exceção em uma regra travar o pipeline inteiro
+                resultado = {
+                    "orientacao":      f"ERRO_INTERNO: {type(e).__name__}",
+                    "valor_calculado": None,
+                    "regra_acionada":  "erro_execucao",
+                }
+
+            dose_kg_ha  = resultado.get("dose_kg_ha")
+            area_ha     = talhao.get("_area_ha")
+            qtd_total   = (
+                round(dose_kg_ha * float(area_ha), 2)
+                if dose_kg_ha is not None and area_ha is not None
+                else None
+            )
+
+            registros.append({
+                "id_talhao":          talhao["id_talhao"],
+                "chave":              talhao["chave"],
+                "unidade":            talhao["unidade"],
+                "safra":              talhao["safra"],
+                "processo":           processo,
+                "orientacao":         resultado["orientacao"],
+                "valor_calculado":    resultado["valor_calculado"],
+                "regra_acionada":     resultado["regra_acionada"],
+                "insumo":             resultado.get("insumo"),
+                "dose_kg_ha":         dose_kg_ha,
+                "quantidade_total_kg": qtd_total,
+                "data_geracao":       hoje,
+            })
+
+    return pd.DataFrame(registros, columns=COLUNAS_GOLD)
+
+
+# ── LEITURA DO SILVER ─────────────────────────────────────────────────────────
+
+def _carregar_silver() -> pd.DataFrame:
+    """
+    Carrega os dados Silver. Prioriza silver_com_safra.parquet (com tchan_estimado)
+    se disponível; caso contrário concatena os arquivos Inventario_*_silver.parquet
+    e avisa que os módulos de insumo retornarão SEM_DADO.
+    """
+    if os.path.exists(SILVER_COM_SAFRA):
+        _log("LOAD", SILVER_COM_SAFRA, "silver_com_safra — tchan_estimado disponível")
+        df = pd.read_parquet(SILVER_COM_SAFRA)
+        _log("CONCAT", "silver_com_safra", f"{len(df)} linhas, {len(df.columns)} colunas")
+        return df
+
+    _log("AVISO", SILVER_COM_SAFRA,
+         "não encontrado — execute extract_safra.py para habilitar módulos de insumo")
+
+    padrao = os.path.join(SILVER_PATH, "Inventario_*_silver.parquet")
+    arquivos = sorted(glob.glob(padrao))
+
+    if not arquivos:
+        raise FileNotFoundError(
+            f"Nenhum arquivo Silver encontrado em '{SILVER_PATH}'. "
+            "Execute src/processing/run_processing.py primeiro."
+        )
+
+    partes = []
+    for arq in arquivos:
+        _log("LOAD", arq)
+        df = pd.read_parquet(arq)
+        partes.append(df)
+
+    df_total = pd.concat(partes, ignore_index=True)
+    _log("CONCAT", f"{len(arquivos)} arquivos", f"{len(df_total)} linhas, {len(df_total.columns)} colunas")
+    return df_total
+
+
+# ── SALVAMENTO DO GOLD ────────────────────────────────────────────────────────
+
+def _salvar_gold(df: pd.DataFrame, hoje: date) -> dict:
+    """Salva o DataFrame Gold em Parquet e CSV. Retorna os caminhos."""
+    os.makedirs(GOLD_PATH, exist_ok=True)
+    sufixo = hoje.strftime("%Y-%m-%d")
+
+    caminho_parquet = os.path.join(GOLD_PATH, f"orientacoes_{sufixo}.parquet")
+    caminho_csv     = os.path.join(GOLD_PATH, f"orientacoes_{sufixo}.csv")
+
+    df.to_parquet(caminho_parquet, index=False)
+    df.to_csv(caminho_csv, index=False, encoding="utf-8-sig")
+
+    _log("SAVE", caminho_parquet, f"{len(df)} registros")
+    _log("SAVE", caminho_csv, "para inspeção manual")
+
+    return {"parquet": caminho_parquet, "csv": caminho_csv}
+
+
+# ── RELATÓRIO GOLD ────────────────────────────────────────────────────────────
+
+def _relatorio_gold(df: pd.DataFrame) -> None:
+    """Imprime resumo do output Gold para validação rápida."""
+    print(f"\n{'='*65}")
+    print("RELATÓRIO — CAMADA GOLD")
+    print(f"{'='*65}")
+    print(f"  Total de registros  : {len(df)}")
+    print(f"  Talhões únicos      : {df['id_talhao'].nunique()}")
+    print(f"  Unidades            : {sorted(df['unidade'].dropna().unique())}")
+
+    print(f"\n  Por processo:")
+    for proc in sorted(df["processo"].unique()):
+        sub = df[df["processo"] == proc]
+        sem_dado = (sub["regra_acionada"].str.startswith("dado_ausente")).sum()
+        tem_insumo = sub["insumo"].notna().sum()
+        insumo_str = f" | com_insumo: {tem_insumo}" if tem_insumo > 0 else ""
+        print(f"    {proc:<22} {len(sub):>7} registros | SEM_DADO: {sem_dado}{insumo_str}")
+
+    print(f"\n  Regras mais acionadas (top 10):")
+    top = df["regra_acionada"].value_counts().head(10)
+    for regra, n in top.items():
+        print(f"    {regra:<45} {n:>6}")
+    print()
+
+
+# ── PIPELINE PRINCIPAL ────────────────────────────────────────────────────────
+
+def executar_pipeline(dry_run: bool = False) -> pd.DataFrame:
+    """
+    Executa o pipeline completo Silver → Gold.
+
+    Parameters
+    ----------
+    dry_run : bool
+        Se True, processa e exibe o relatório mas não salva os arquivos.
+
+    Returns
+    -------
+    DataFrame Gold com as orientações geradas.
+    """
+    hoje = date.today()
+    _log("START", "pipeline_gold", f"data_geracao={hoje} | dry_run={dry_run}")
+
+    df_silver = _carregar_silver()
+    _log("RULES", f"{len(REGRAS)} processos", str(list(REGRAS.keys())))
+
+    df_gold = _aplicar_regras(df_silver, hoje)
+    _relatorio_gold(df_gold)
+
+    if not dry_run:
+        caminhos = _salvar_gold(df_gold, hoje)
+        _log("DONE", "Gold salvo", str(caminhos))
     else:
-        subset = base
-        log(f"  Processando todos: {len(subset):,} talhões com solo")
-        prefixo = "gold"
+        _log("DRY-RUN", "arquivos NÃO salvos")
 
-    gold = pd.DataFrame(subset.apply(lambda r: _aplicar_regras_linha(r.to_dict()), axis=1).tolist())
-
-    # Relatório rápido no terminal
-    for nome, _, _ in REGRAS:
-        col = f"{nome}_regra_acionada"
-        if col in gold.columns:
-            log(f"  {nome}: {gold[col].value_counts().to_dict()}")
-
-    hoje = date.today().isoformat()
-    gold.to_parquet(DATA_GOLD / f"{prefixo}_{hoje}.parquet", index=False)
-    gold.to_csv(DATA_GOLD / f"{prefixo}_{hoje}.csv", index=False, encoding="utf-8-sig")
-    log(f"  Salvo: {prefixo}_{hoje}.parquet e .csv ({len(gold):,} talhões × {gold.shape[1]} colunas)")
-    return gold
+    return df_gold
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# ── UTILITÁRIO ────────────────────────────────────────────────────────────────
+
+def _log(status: str, fonte: str, detalhe: str = "") -> None:
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [{status}] {fonte}" + (f" — {detalhe}" if detalhe else ""))
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--todos", action="store_true", help="Processar todos os talhões com solo")
-    args = parser.parse_args()
-
-    log("=" * 55)
-    log("Pipeline Gold — AgroTech ATVOS | Sprint 2")
-    log("=" * 55)
-
-    df1 = passo1_unificar_silver()
-    df2 = passo2_aplicar_correcao(df1)
-    df3 = passo3_join_solo(df2)
-    df4 = passo4_gerar_gold(df3, amostra=not args.todos)
-
-    log("=" * 55)
-    log(f"Concluído. Gold: {len(df4):,} talhões × {df4.shape[1]} colunas.")
-    log("=" * 55)
+    dry = "--dry-run" in sys.argv
+    executar_pipeline(dry_run=dry)

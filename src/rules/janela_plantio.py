@@ -1,225 +1,217 @@
 """
-Módulo de regras agronômicas: Janela de Plantio
-=================================================
-Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022), p. 8 e 15.
+src/rules/janela_plantio.py
+Regra de janela de plantio para reforma e expansão de canavial.
 
-Regra central:
-  Dado o sistema de plantio (cana de ano, ano e meio, inverno, soca),
-  calcula a janela de colheita esperada e verifica se ela cai dentro do
-  período ideal (maio–novembro, Centro-Sul).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSEUDOCÓDIGO (validar com PO Atvos antes de alterar meses)
 
-  Data de referência por tipo de talhão:
-  - Cana Planta e outros plantios: DATA_PLANTIO
-  - Cana Soca: ULT_CORTE (DATA_PLANTIO é o plantio original, que pode ter
-    vários anos; o ciclo atual começa a partir do último corte)
+  ENTRADAS DISPONÍVEIS NA SILVER:
+    data_plantio : DATA_PLANTIO — data real ou prevista de plantio
+    man_hipot    : MAN_HIPOT    — maturação hipotética ("Precoce","Média","Tardia","A Definir")
+    tp_reforma   : TP_REFORMA   — tipo de reforma ("Convencional","Inverno","18 Meses")
+    categoria    : CATEGORIA    — filtro: aplicar apenas em "Formação" ou "Muda"
 
-  Ciclos por sistema (manual, p. 15):
-  - Cana de Ano e Meio: 14–22 meses
-  - Cana de Ano:        12 meses
-  - Cana Soca:          12 meses
-  - Cana de Inverno:    12–16 meses
+  SE categoria NOT IN {"Formação", "Muda"} → NAO_SE_APLICA (já estabelecido)
+  SE data_plantio é nulo E man_hipot é nulo → SEM_DADO
 
-  Verificação da janela: checa se QUALQUER mês do intervalo [min, max]
-  coincide com mai–nov. Para sistemas de ciclo fixo (soca, ano) min == max
-  e a lógica é equivalente ao mês único. Para ciclos variáveis (ano e meio,
-  inverno), evita falsos negativos quando parte da janela está dentro do ideal.
+  JANELAS POR MATURAÇÃO (meses ideais — região Centro-Oeste/SP — confirmar):
+    "Precoce" → plantio: abril – junho    (colheita: jun–set ano seguinte)
+    "Média"   → plantio: junho – agosto   (colheita: ago–nov ano seguinte)
+    "Tardia"  → plantio: agosto – outubro (colheita: out–jan ano seguinte)
+    "A Definir" → orientar a definir com agrônomo antes do plantio
 
-  Janela ideal de colheita Centro-Sul: maio–novembro
-  Início do preparo de solo: 150 dias antes do plantio
+  JANELAS POR TIPO DE REFORMA:
+    "Convencional" → mesmas janelas por maturação acima
+    "Inverno"      → plantio: abril – julho (aproveitamento de chuva invernal)
+    "18 Meses"     → plantio: março – maio  (ciclo mais longo, antecipa)
 
-  Mudas necessárias: 10–15 t/ha (12 gemas/m em condições normais;
-  15–18 gemas/m em períodos de estiagem)
-
-Parâmetros pendentes de validação pelo PO ATVOS:
-  - Matriz de Aptidão por mês (mencionada no TAP — mais granular que esta regra)
-  - ATVOS opera exclusivamente no Centro-Sul? Confirmar janela mai–nov.
-  - Quantidade de mudas por ambiente de produção específico da ATVOS
+  AVALIAÇÃO DO PLANTIO REALIZADO:
+    SE data_plantio informada:
+      → verificar se o mês de plantio está dentro da janela esperada
+      → retornar "DENTRO_DA_JANELA" | "FORA_DA_JANELA" | "LIMITE_DA_JANELA"
+    SE data_plantio nula:
+      → retornar orientação sobre a janela recomendada sem avaliar real vs. esperado
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from __future__ import annotations
-from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta  # type: ignore
+import pandas as pd
+from ._base import sem_dado, nao_se_aplica, resultado, texto
 
-# ── Constantes ──────────────────────────────────────────────────────────────
-MES_COLHEITA_MIN = 5    # maio   [AGUARDA VALIDACAO PO — Matriz de Aptidão]
-MES_COLHEITA_MAX = 11   # novembro
-ANTECEDENCIA_PREPARO_DIAS = 150
+# ── JANELAS DE PLANTIO (meses do ano, 1=jan ... 12=dez) ──────────────────────
+# Confirmar com PO Atvos — variam por unidade industrial e microrregião
 
-# Ciclos por sistema (meses mínimo e máximo)
-CICLOS = {
-    "ano_e_meio":  (14, 22),
-    "inverno":     (12, 16),
-    "ano":         (12, 12),
-    "soca":        (12, 12),
+_JANELAS_MATURACAO = {
+    "Precoce":    (4, 6),    # abril – junho
+    "Média":      (6, 8),    # junho – agosto
+    "Tardia":     (8, 10),   # agosto – outubro
+    "A Definir":  None,      # sem janela definida
 }
 
-CATEGORIAS_INAPTAS = {"Em Reforma", "Pousio", "A Definir", "Passagem"}
+_JANELAS_REFORMA = {
+    "Convencional": None,          # usa janela por maturação
+    "Inverno":      (4, 7),        # abril – julho
+    "18 Meses":     (3, 5),        # março – maio
+}
+
+_NOME_MES = {
+    1: "janeiro", 2: "fevereiro", 3: "março",    4: "abril",
+    5: "maio",    6: "junho",     7: "julho",     8: "agosto",
+    9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro",
+}
 
 
-def _identificar_sistema(estagio: str, categoria: str) -> str:
-    """Identifica o sistema de plantio com base no ESTAGIO e CATEGORIA."""
-    s = str(estagio).lower()
-    if "ano e meio" in s or "18m" in s or "15m" in s:
-        return "ano_e_meio"
-    elif "inverno" in s:
-        return "inverno"
-    elif "ano" in s and "meio" not in s:
-        return "ano"
-    elif "12m" in s or "formação 12" in s:
-        return "ano"
+# ── HELPERS ───────────────────────────────────────────────────────────────────
+
+def _janela_para_texto(inicio: int, fim: int) -> str:
+    return f"{_NOME_MES[inicio]} a {_NOME_MES[fim]}"
+
+
+def _avaliar_mes(mes: int, inicio: int, fim: int) -> str:
+    """Verifica se um mês está dentro da janela [inicio, fim]."""
+    # Janela pode cruzar virada de ano (ex: nov–jan)
+    if inicio <= fim:
+        dentro = inicio <= mes <= fim
     else:
-        return "soca"   # cortes numerados e demais → soca (12 meses)
+        dentro = mes >= inicio or mes <= fim
+
+    if dentro:
+        return "dentro"
+    # Um mês de distância → limite
+    if mes == inicio - 1 or mes == fim + 1:
+        return "limite"
+    return "fora"
 
 
-def calcular_janela_plantio(row: dict) -> dict:
+# ── REGRA PRINCIPAL ───────────────────────────────────────────────────────────
+
+def calcular_janela_plantio(talhao: dict) -> dict:
     """
-    Avalia a janela de plantio e colheita estimada para um talhão.
+    Avalia a adequação da janela de plantio para um talhão em formação.
 
-    Parâmetros
+    Compara DATA_PLANTIO real (se disponível) com a janela ideal definida
+    por MAN_HIPOT e TP_REFORMA. Se sem data real, retorna orientação preventiva.
+
+    Parameters
     ----------
-    row : dict
-        Linha do DataFrame enriquecido (Silver + Solo). Campos utilizados:
-        - DATA_PLANTIO : datetime — data de plantio
-        - ESTAGIO      : str      — estágio de desenvolvimento
-        - CATEGORIA    : str      — tipo de ciclo da cana
-        - AREA_HA      : float    — área do talhão (ha)
+    talhao : dict
+        Campos disponíveis na Silver:
+          data_plantio (datetime | str | None) DATA_PLANTIO
+          man_hipot    (str)  MAN_HIPOT: "Precoce" | "Média" | "Tardia" | "A Definir"
+          tp_reforma   (str)  TP_REFORMA: "Convencional" | "Inverno" | "18 Meses"
+          categoria    (str)  CATEGORIA: deve ser "Formação" ou "Muda"
 
-    Retorno
+    Returns
     -------
-    dict com chaves:
-        processo, orientacao, valor_calculado, unidade_medida,
-        regra_acionada, flag_aguardando_validacao_po,
-        data_colheita_min, data_colheita_max, data_preparo_solo
+    dict com:
+      orientacao       : avaliação da janela (DENTRO / FORA / orientação)
+      valor_calculado  : mês do plantio como float (ex: 4.0 = abril), ou None
+      regra_acionada   : código da condição
 
-    Exemplo
-    -------
-    >>> from datetime import datetime
+    Examples
+    --------
+    >>> from datetime import date
     >>> calcular_janela_plantio({
-    ...     "DATA_PLANTIO": datetime(2024, 10, 1),
-    ...     "ESTAGIO": "Cana de Ano e Meio",
-    ...     "CATEGORIA": "Cana Planta",
-    ...     "AREA_HA": 50.0
+    ...     'data_plantio': date(2025, 5, 15),
+    ...     'man_hipot': 'Precoce', 'tp_reforma': 'Convencional',
+    ...     'categoria': 'Formação'
     ... })
-    # Retorna janela de colheita dez/2025–ago/2026, alerta fora de mai-nov
+    {'orientacao': 'Plantio DENTRO DA JANELA: maio (janela Precoce: abril a junho)',
+     'valor_calculado': 5.0,
+     'regra_acionada': 'plantio_dentro_janela_maturacao'}
     """
-    base = {"processo": "janela_plantio"}
+    data_plantio = talhao.get("data_plantio")
+    man_hipot    = talhao.get("man_hipot")
+    tp_reforma   = talhao.get("tp_reforma")
+    categoria    = talhao.get("categoria")
 
-    categoria = str(row.get("CATEGORIA", "")).strip()
+    # ── filtro de categoria ────────────────────────────────────────────────────
+    if texto(categoria) and categoria not in ("Formação", "Muda"):
+        return nao_se_aplica("categoria_nao_plantio")
 
-    if categoria in CATEGORIAS_INAPTAS:
-        return {**base,
-                "orientacao": f"Talhão com categoria '{categoria}': janela de plantio não aplicável.",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "janela_nao_aplicavel",
-                "flag_aguardando_validacao_po": False,
-                "data_colheita_min": None,
-                "data_colheita_max": None,
-                "data_preparo_solo": None}
+    # ── determinar janela vigente ──────────────────────────────────────────────
+    # Prioridade: TP_REFORMA específico > MAN_HIPOT
+    janela = None
+    fonte_janela = ""
 
-    estagio = str(row.get("ESTAGIO", "")).strip()
-    sistema = _identificar_sistema(estagio, categoria)
-    ciclo_min, ciclo_max = CICLOS[sistema]
+    if texto(tp_reforma) and tp_reforma in _JANELAS_REFORMA:
+        janela_reforma = _JANELAS_REFORMA[tp_reforma]
+        if janela_reforma is not None:
+            janela = janela_reforma
+            fonte_janela = f"reforma '{tp_reforma}'"
 
-    # Escolher data de referência correta
-    # - Soca: ULT_CORTE (o ciclo atual começa no último corte, não no plantio original)
-    # - Demais: DATA_PLANTIO
-    if sistema == "soca":
-        data_ref_raw = row.get("ULT_CORTE")
-        campo_ref = "ULT_CORTE"
-    else:
-        data_ref_raw = row.get("DATA_PLANTIO")
-        campo_ref = "DATA_PLANTIO"
+    if janela is None and texto(man_hipot) and man_hipot in _JANELAS_MATURACAO:
+        janela_mat = _JANELAS_MATURACAO[man_hipot]
+        if janela_mat is not None:
+            janela = janela_mat
+            fonte_janela = f"maturação '{man_hipot}'"
 
-    # Fallback: se o campo preferido estiver ausente, tenta o outro
-    if data_ref_raw is None or (isinstance(data_ref_raw, float) and data_ref_raw != data_ref_raw):
-        alt_raw = row.get("DATA_PLANTIO") if sistema == "soca" else row.get("ULT_CORTE")
-        if alt_raw is not None and not (isinstance(alt_raw, float) and alt_raw != alt_raw):
-            data_ref_raw = alt_raw
-            campo_ref = "DATA_PLANTIO (fallback — ULT_CORTE ausente)" if sistema == "soca" else "ULT_CORTE (fallback)"
-        else:
-            return {**base,
-                    "orientacao": f"SEM_DADO: {campo_ref} ausente e sem fallback disponível.",
-                    "valor_calculado": None,
-                    "unidade_medida": None,
-                    "regra_acionada": "dado_ausente_data_referencia",
-                    "flag_aguardando_validacao_po": False,
-                    "data_colheita_min": None,
-                    "data_colheita_max": None,
-                    "data_preparo_solo": None}
-
-    # Converter para date
-    data_ref = data_ref_raw
-    if hasattr(data_ref, "date"):
-        data_ref = data_ref.date()
-    elif isinstance(data_ref, str):
-        try:
-            data_ref = date.fromisoformat(str(data_ref)[:10])
-        except ValueError:
-            return {**base,
-                    "orientacao": f"SEM_DADO: {campo_ref} com formato inválido.",
-                    "valor_calculado": None,
-                    "unidade_medida": None,
-                    "regra_acionada": "dado_invalido_data_referencia",
-                    "flag_aguardando_validacao_po": False,
-                    "data_colheita_min": None,
-                    "data_colheita_max": None,
-                    "data_preparo_solo": None}
-
-    # Calcular janela de colheita
-    data_colheita_min = data_ref + relativedelta(months=ciclo_min)
-    data_colheita_max = data_ref + relativedelta(months=ciclo_max)
-    data_preparo = data_ref - timedelta(days=ANTECEDENCIA_PREPARO_DIAS)
-
-    # Verificar se ALGUM mês da janela [min, max] cai no período ideal mai-nov.
-    # Para ciclos fixos (soca, ano) min == max e isso equivale a checar um único mês.
-    # Para ciclos variáveis (ano e meio: 14-22m, inverno: 12-16m) evita falsos
-    # negativos quando parte da janela está dentro do período ideal.
-    meses_janela: set[int] = set()
-    d = data_colheita_min
-    while d <= data_colheita_max:
-        meses_janela.add(d.month)
-        d += relativedelta(months=1)
-    janela_ok = bool(meses_janela & set(range(MES_COLHEITA_MIN, MES_COLHEITA_MAX + 1)))
-
-    if janela_ok:
-        alerta = "Colheita estimada dentro da janela ideal (mai–nov). ✓"
-        regra = "janela_dentro_do_ideal"
-    else:
-        alerta = (
-            f"ATENÇÃO: colheita estimada fora da janela ideal (mai–nov). "
-            f"Mês esperado: {data_colheita_min.strftime('%b/%Y')}. "
-            f"Risco de brotações comprometidas pelo inverno."
+    if janela is None and man_hipot == "A Definir":
+        return resultado(
+            "Janela indefinida: MAN_HIPOT = 'A Definir' — definir variedade/maturação "
+            "com o agrônomo antes do plantio",
+            None,
+            "man_hipot_a_definir",
         )
-        regra = "janela_fora_do_ideal"
 
-    # Mudas recomendadas
-    area_ha = row.get("AREA_HA")
-    if area_ha and float(area_ha) > 0:
-        mudas_min = float(area_ha) * 10
-        mudas_max = float(area_ha) * 15
-        mudas_txt = f"Mudas necessárias: {mudas_min:.0f}–{mudas_max:.0f} t (10–15 t/ha × {area_ha:.1f} ha)."
-    else:
-        mudas_txt = "Mudas necessárias: 10–15 t/ha."
+    if janela is None:
+        return sem_dado("man_hipot_ou_tp_reforma")
 
-    orientacao = (
-        f"Sistema: {sistema.replace('_', ' ')}. "
-        f"Ref.: {campo_ref} ({data_ref.strftime('%d/%m/%Y')}). "
-        f"Janela de colheita estimada: "
-        f"{data_colheita_min.strftime('%b/%Y')}–{data_colheita_max.strftime('%b/%Y')} "
-        f"({ciclo_min}–{ciclo_max} meses). "
-        f"{alerta} "
-        f"Início do preparo de solo: {data_preparo.strftime('%d/%m/%Y')} "
-        f"({ANTECEDENCIA_PREPARO_DIAS} dias antes). "
-        f"{mudas_txt}"
+    inicio, fim = janela
+    janela_txt = _janela_para_texto(inicio, fim)
+
+    # ── sem data de plantio → orientação preventiva ───────────────────────────
+    if data_plantio is None:
+        return resultado(
+            f"Janela de plantio recomendada ({fonte_janela}): {janela_txt}",
+            None,
+            "janela_sem_data_plantio",
+        )
+
+    # ── com data de plantio → avaliar ─────────────────────────────────────────
+    try:
+        dt = pd.Timestamp(data_plantio)
+        mes = dt.month
+    except Exception:
+        return sem_dado("data_plantio_formato_invalido")
+
+    situacao = _avaliar_mes(mes, inicio, fim)
+    mes_txt = _NOME_MES.get(mes, str(mes))
+
+    if situacao == "dentro":
+        return resultado(
+            f"Plantio DENTRO DA JANELA: {mes_txt} "
+            f"(janela {fonte_janela}: {janela_txt})",
+            float(mes),
+            f"plantio_dentro_janela_{fonte_janela.split()[0].lower()}",
+        )
+
+    if situacao == "limite":
+        return resultado(
+            f"Plantio no LIMITE DA JANELA: {mes_txt} — "
+            f"janela ideal ({fonte_janela}): {janela_txt}",
+            float(mes),
+            f"plantio_limite_janela",
+        )
+
+    return resultado(
+        f"Plantio FORA DA JANELA: {mes_txt} — "
+        f"janela ideal ({fonte_janela}): {janela_txt} — "
+        f"avaliar impacto na maturação",
+        float(mes),
+        f"plantio_fora_janela",
     )
 
-    return {**base,
-            "orientacao": orientacao,
-            "valor_calculado": ciclo_min,
-            "unidade_medida": "meses_ciclo",
-            "regra_acionada": regra,
-            "flag_aguardando_validacao_po": True,   # Matriz de Aptidão aguarda PO
-            "data_colheita_min": data_colheita_min.isoformat(),
-            "data_colheita_max": data_colheita_max.isoformat(),
-            "data_preparo_solo": data_preparo.isoformat()}
+
+if __name__ == "__main__":
+    import datetime
+    casos = [
+        {"data_plantio": datetime.date(2025, 5, 15), "man_hipot": "Precoce",  "tp_reforma": "Convencional", "categoria": "Formação"},
+        {"data_plantio": datetime.date(2025, 9, 10), "man_hipot": "Precoce",  "tp_reforma": "Convencional", "categoria": "Formação"},
+        {"data_plantio": datetime.date(2025, 4, 20), "man_hipot": "Média",    "tp_reforma": "Inverno",      "categoria": "Formação"},
+        {"data_plantio": None,                       "man_hipot": "Tardia",   "tp_reforma": "Convencional", "categoria": "Formação"},
+        {"data_plantio": None,                       "man_hipot": "A Definir","tp_reforma": None,           "categoria": "Formação"},
+        {"data_plantio": datetime.date(2025, 7, 1),  "man_hipot": "Média",    "tp_reforma": None,           "categoria": "Cana Soca"},
+    ]
+    for c in casos:
+        r = calcular_janela_plantio(c)
+        print(f"{r['regra_acionada']:<45} | {r['orientacao']}")
