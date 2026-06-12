@@ -1,355 +1,623 @@
-const records = [
-  {
-    id: "410149",
-    unit: "UMV",
-    process: "erradicacao",
-    orientation: "MONITORAR: canavial tardio com sexto corte.",
-    input: "none",
-    inputLabel: "-",
-    dose: "-",
-    rule: "erradicacao_corte_alto_tch_ok",
-    date: "08/06/2026",
-    status: "monitor",
-  },
-  {
-    id: "410150",
-    unit: "UMV",
-    process: "calagem",
-    orientation: "SEM_DADO: pH do solo ausente.",
-    input: "calcario",
-    inputLabel: "Calcario dolomitico",
-    dose: "-",
-    rule: "dado_ausente_analise_solo",
-    date: "08/06/2026",
-    status: "attention",
-  },
-  {
-    id: "410152",
-    unit: "URC",
-    process: "janela_plantio",
-    orientation: "Plantio DENTRO DA JANELA ideal.",
-    input: "mudas",
-    inputLabel: "Mudas",
-    dose: "14.500",
-    rule: "janela_dentro_do_ideal",
-    date: "08/06/2026",
-    status: "ok",
-  },
-  {
-    id: "410155",
-    unit: "URC",
-    process: "fosfatagem",
-    orientation: "Fosfatagem corretiva recomendada: 120 kg/ha.",
-    input: "fosforo",
-    inputLabel: "P2O5",
-    dose: "120",
-    rule: "fosfatagem_manutencao_cana_planta",
-    date: "08/06/2026",
-    status: "attention",
-  },
-  {
-    id: "410158",
-    unit: "UEL",
-    process: "gessagem",
-    orientation: "Aplicar gesso agricola conforme analise de subsolo.",
-    input: "gesso",
-    inputLabel: "Gesso agricola",
-    dose: "2.500",
-    rule: "gessagem_necessaria",
-    date: "08/06/2026",
-    status: "attention",
-  },
-  {
-    id: "410163",
-    unit: "UEL",
-    process: "erradicacao",
-    orientation: "ERRADICACAO RECOMENDADA: TCH baixo e corte alto.",
-    input: "none",
-    inputLabel: "-",
-    dose: "-",
-    rule: "erradicacao_tch_baixo_e_corte_alto",
-    date: "08/06/2026",
-    status: "urgent",
-  },
-  {
-    id: "410172",
-    unit: "UCP",
-    process: "calagem",
-    orientation: "Calagem superficial recomendada.",
-    input: "calcario",
-    inputLabel: "Calcario calcitico",
-    dose: "3.200",
-    rule: "calagem_superficial",
-    date: "08/06/2026",
-    status: "attention",
-  },
-  {
-    id: "410181",
-    unit: "UCP",
-    process: "fosfatagem",
-    orientation: "Dose de manutencao calculada para cana soca.",
-    input: "fosforo",
-    inputLabel: "P2O5",
-    dose: "31,7",
-    rule: "fosfatagem_manutencao_soca",
-    date: "08/06/2026",
-    status: "ok",
-  },
-  {
-    id: "410194",
-    unit: "URC",
-    process: "janela_plantio",
-    orientation: "ATENCAO: colheita estimada fora da janela ideal.",
-    input: "mudas",
-    inputLabel: "Mudas",
-    dose: "12.800",
-    rule: "janela_fora_do_ideal",
-    date: "08/06/2026",
-    status: "attention",
-  },
-  {
-    id: "410205",
-    unit: "UMV",
-    process: "gessagem",
-    orientation: "Gessagem nao necessaria para o talhao.",
-    input: "gesso",
-    inputLabel: "Gesso agricola",
-    dose: "0",
-    rule: "gessagem_nao_necessaria",
-    date: "08/06/2026",
-    status: "ok",
-  },
+/**
+ * Monitor Agronomico Atvos — SPA
+ * Três views: Dashboard, Talhões, Relatórios.
+ * Consome http://localhost:8000/api  (src/api/server.py).
+ * Fallback para dados de demonstração quando a API está offline.
+ */
+
+const API = "http://localhost:8000/api";
+const PER = 20;
+
+// ── Labels ─────────────────────────────────────────────────────────────────
+const PROC = {
+  calagem:           "Calagem",
+  gessagem:          "Gessagem",
+  fosfatagem:        "Fosfatagem",
+  fosfatagem_insumo: "Fosfatagem Insumo",
+  erradicacao:       "Erradicação",
+  janela_plantio:    "Janela de Plantio",
+  dessecacao:        "Dessecação",
+};
+
+const STATUS = { urgent: "Urgente", attention: "Atenção", monitor: "Monitorar", ok: "OK" };
+
+// ── Demo data ───────────────────────────────────────────────────────────────
+const DEMO_RECS = [
+  { id_talhao:"41014900010008", chave:"410149-1-8", unidade:"UMV", safra:"22122",
+    processo:"erradicacao", orientacao:"MONITORAR: desempenho abaixo do esperado (3º corte, TCH 49.0 t/ha)",
+    regra_acionada:"medio_tch_monitorar", insumo:"", dose_kg_ha:"", quantidade_total_kg:"",
+    data_geracao:"2026-06-11", status:"monitor" },
+  { id_talhao:"41014900020001", chave:"410149-2-1", unidade:"UMV", safra:"22122",
+    processo:"calagem", orientacao:"SEM_DADO: pH do solo ausente.",
+    regra_acionada:"dado_ausente_ph_solo", insumo:"calcario_dolomitico",
+    dose_kg_ha:"", quantidade_total_kg:"", data_geracao:"2026-06-11", status:"attention" },
+  { id_talhao:"41015200030002", chave:"410152-3-2", unidade:"URC", safra:"22122",
+    processo:"janela_plantio", orientacao:"Plantio DENTRO DA JANELA ideal.",
+    regra_acionada:"janela_dentro_do_ideal", insumo:"mudas",
+    dose_kg_ha:"14500", quantidade_total_kg:"72500", data_geracao:"2026-06-11", status:"ok" },
+  { id_talhao:"41015500040001", chave:"410155-4-1", unidade:"URC", safra:"22122",
+    processo:"fosfatagem", orientacao:"Fosfatagem corretiva recomendada: 120 kg/ha.",
+    regra_acionada:"fosfatagem_manutencao_cana_planta", insumo:"p2o5",
+    dose_kg_ha:"120", quantidade_total_kg:"600", data_geracao:"2026-06-11", status:"attention" },
+  { id_talhao:"41015800050003", chave:"410158-5-3", unidade:"UEL", safra:"22122",
+    processo:"gessagem", orientacao:"Aplicar gesso agrícola conforme análise de subsolo.",
+    regra_acionada:"gessagem_necessaria", insumo:"gesso_agricola",
+    dose_kg_ha:"2500", quantidade_total_kg:"12500", data_geracao:"2026-06-11", status:"attention" },
+  { id_talhao:"41016300060001", chave:"410163-6-1", unidade:"UEL", safra:"22122",
+    processo:"erradicacao", orientacao:"ERRADICACAO RECOMENDADA: TCH baixo e corte alto.",
+    regra_acionada:"erradicacao_tch_baixo_e_corte_alto", insumo:"",
+    dose_kg_ha:"", quantidade_total_kg:"", data_geracao:"2026-06-11", status:"urgent" },
+  { id_talhao:"41017200070002", chave:"410172-7-2", unidade:"UCP", safra:"22122",
+    processo:"calagem", orientacao:"Calagem superficial recomendada.",
+    regra_acionada:"calagem_superficial", insumo:"calcario_calcitico",
+    dose_kg_ha:"3200", quantidade_total_kg:"16000", data_geracao:"2026-06-11", status:"attention" },
+  { id_talhao:"41018100080001", chave:"410181-8-1", unidade:"UCP", safra:"22122",
+    processo:"fosfatagem", orientacao:"Dose de manutenção calculada para cana soca.",
+    regra_acionada:"fosfatagem_manutencao_soca", insumo:"p2o5",
+    dose_kg_ha:"31.7", quantidade_total_kg:"158.5", data_geracao:"2026-06-11", status:"ok" },
+  { id_talhao:"41019400090004", chave:"410194-9-4", unidade:"URC", safra:"22122",
+    processo:"janela_plantio", orientacao:"ATENCAO: colheita estimada fora da janela ideal.",
+    regra_acionada:"janela_fora_do_ideal", insumo:"mudas",
+    dose_kg_ha:"12800", quantidade_total_kg:"64000", data_geracao:"2026-06-11", status:"attention" },
+  { id_talhao:"41020500100001", chave:"410205-10-1", unidade:"UMV", safra:"22122",
+    processo:"gessagem", orientacao:"Gessagem não necessária para o talhão.",
+    regra_acionada:"gessagem_nao_necessaria", insumo:"gesso_agricola",
+    dose_kg_ha:"0", quantidade_total_kg:"0", data_geracao:"2026-06-11", status:"ok" },
 ];
 
-const elements = {
-  body: document.querySelector("#records-body"),
-  emptyState: document.querySelector("#empty-state"),
-  visibleRecords: document.querySelector("#visible-records"),
-  filteredCount: document.querySelector("#filtered-count"),
-  progress: document.querySelector("#summary-progress"),
-  activeFilters: document.querySelector("#active-filters"),
-  search: document.querySelector("#search-input"),
-  unit: document.querySelector("#unit-filter"),
-  process: document.querySelector("#process-filter"),
-  input: document.querySelector("#input-filter"),
-  status: document.querySelector("#status-filter"),
-  reset: document.querySelector("#reset-filters"),
-  export: document.querySelector("#export-button"),
-  toast: document.querySelector("#toast"),
-  mobileFilter: document.querySelector("#mobile-filter-button"),
-  filtersPanel: document.querySelector("#filters-panel"),
+const DEMO_META = {
+  total_registros: 471982, total_talhoes: 67426,
+  urgent: 0, attention: 159181, monitor: 11179, ok: 301622,
+  unidades:  ["UAE","UAT","UCP","UCR","UEL","UMV","URC","USL"],
+  processos: ["calagem","dessecacao","erradicacao","fosfatagem","fosfatagem_insumo","gessagem","janela_plantio"],
 };
 
-const labels = {
-  process: {
-    calagem: "Calagem",
-    gessagem: "Gessagem",
-    fosfatagem: "Fosfatagem",
-    erradicacao: "Erradicacao",
-    janela_plantio: "Janela de plantio",
-  },
-  status: {
-    urgent: "Urgente",
-    attention: "Atencao",
-    monitor: "Monitorar",
-    ok: "Sem alerta",
-  },
-};
-
-let filteredRecords = [...records];
-let toastTimer;
-
-function normalizeText(value) {
-  return String(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function buildDemoTalhoes(recs) {
+  const g = {};
+  const pri = { urgent: 3, attention: 2, monitor: 1, ok: 0 };
+  for (const r of recs) {
+    if (!g[r.id_talhao]) g[r.id_talhao] = {
+      id_talhao: r.id_talhao, chave: r.chave, unidade: r.unidade,
+      safra: r.safra, status_geral: "ok", _p: 0, alertas: [], total_alertas: 0,
+    };
+    const t = g[r.id_talhao];
+    if ((pri[r.status] ?? 0) > t._p) { t._p = pri[r.status]; t.status_geral = r.status; }
+    if (r.status !== "ok") { t.alertas.push(r.processo); t.total_alertas++; }
+  }
+  return Object.values(g).map(t => { const { _p, ...rest } = t; return rest; });
 }
 
-function getFilters() {
+function buildDemoRelatorio(recs) {
+  const proc = {}, unit = {};
+  const total = recs.length;
+  for (const r of recs) {
+    if (!proc[r.processo]) proc[r.processo] = { total:0,urgent:0,attention:0,monitor:0,ok:0,sem_dado:0 };
+    proc[r.processo].total++;
+    proc[r.processo][r.status]++;
+    if (r.regra_acionada.includes("dado_ausente")) proc[r.processo].sem_dado++;
+
+    if (!unit[r.unidade]) unit[r.unidade] = { talhoes: new Set(), urgent:0,attention:0,monitor:0,ok:0 };
+    unit[r.unidade].talhoes.add(r.id_talhao);
+    unit[r.unidade][r.status]++;
+  }
   return {
-    search: normalizeText(elements.search.value.trim()),
-    unit: elements.unit.value,
-    process: elements.process.value,
-    input: elements.input.value,
-    status: elements.status.value,
+    por_processo: Object.entries(proc).map(([p,d]) => ({ processo:p, label: PROC[p]||p, ...d })),
+    por_unidade:  Object.entries(unit).map(([u,d]) => ({
+      unidade:u, total_talhoes: d.talhoes.size,
+      urgent:d.urgent, attention:d.attention, monitor:d.monitor, ok:d.ok,
+    })),
+    top_regras: [
+      { regra:"dado_ausente_ph_solo",         total:67426, pct:14.3 },
+      { regra:"dado_ausente_p_disponivel",    total:67426, pct:14.3 },
+      { regra:"categoria_nao_plantio",        total:58608, pct:12.4 },
+      { regra:"textura_arenoso_sem_analise_al",total:30107,pct:6.4  },
+    ],
   };
 }
 
-function matchesSearch(record, search) {
-  if (!search) return true;
+const DEMO_TALHOES  = buildDemoTalhoes(DEMO_RECS);
+const DEMO_RELATORIO = buildDemoRelatorio(DEMO_RECS);
 
-  return [
-    record.id,
-    record.unit,
-    record.process,
-    record.orientation,
-    record.inputLabel,
-    record.rule,
-  ].some((value) => normalizeText(value).includes(search));
+// ── Estado global ───────────────────────────────────────────────────────────
+let isDemo = false;
+
+const dashState = {
+  page: 1, total: 0, total_pages: 1,
+  filters: { unit:"all", processo:"all", status:"all", search:"" },
+};
+const talhoesState = {
+  page: 1, total: 0, total_pages: 1,
+  filters: { unit:"all", status:"all", search:"" },
+  loaded: false,
+};
+let relatorioLoaded = false;
+
+// ── Helpers DOM ─────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const e = (id) => document.getElementById(id);
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-function renderRecords() {
-  const filters = getFilters();
+// ── Toast ───────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg) {
+  clearTimeout(_tt);
+  const el = e("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  _tt = setTimeout(() => el.classList.remove("show"), 2500);
+}
 
-  filteredRecords = records.filter((record) => {
-    return (
-      matchesSearch(record, filters.search) &&
-      (filters.unit === "all" || record.unit === filters.unit) &&
-      (filters.process === "all" || record.process === filters.process) &&
-      (filters.input === "all" || record.input === filters.input) &&
-      (filters.status === "all" || record.status === filters.status)
-    );
-  });
+// ── Modal ───────────────────────────────────────────────────────────────────
+function openModal(title, bodyHtml) {
+  e("modal-title").textContent = title;
+  e("modal-body").innerHTML = bodyHtml;
+  e("modal").hidden = false;
+  e("modal-close").focus();
+}
+function closeModal() { e("modal").hidden = true; }
 
-  elements.body.innerHTML = filteredRecords
-    .map(
-      (record) => `
-        <tr class="${record.status === "urgent" ? "row-urgent" : ""}">
-          <td>${record.id}</td>
-          <td>${record.unit}</td>
-          <td><span class="process-label">${labels.process[record.process]}</span></td>
-          <td title="${record.orientation}">${record.orientation}</td>
-          <td>${record.inputLabel}</td>
-          <td>${record.dose}</td>
-          <td title="${record.rule}">${record.rule}</td>
-          <td>${record.date}</td>
-          <td>
-            <span class="status-badge status-${record.status}">
-              ${labels.status[record.status]}
-            </span>
-          </td>
-        </tr>
-      `,
-    )
-    .join("");
+// ── Pagination ──────────────────────────────────────────────────────────────
+function buildRange(cur, max) {
+  if (max <= 7) return Array.from({ length: max }, (_, i) => i + 1);
+  if (cur <= 4) return [1, 2, 3, 4, 5, "…", max];
+  if (cur >= max - 3) return [1, "…", max-4, max-3, max-2, max-1, max];
+  return [1, "…", cur-1, cur, cur+1, "…", max];
+}
 
-  elements.visibleRecords.textContent = filteredRecords.length;
-  elements.emptyState.hidden = filteredRecords.length > 0;
-  elements.body.closest(".table-wrapper").hidden = filteredRecords.length === 0;
-
-  const estimatedTotal = Math.round(
-    67426 * (filteredRecords.length / records.length),
+function renderPagination(containerId, cur, total_pages, onPageClick) {
+  const container = e(containerId);
+  if (total_pages <= 1) { container.innerHTML = ""; return; }
+  const range = buildRange(cur, total_pages);
+  container.innerHTML = [
+    `<button class="page-btn" data-p="${cur-1}" ${cur===1?"disabled":""}>‹</button>`,
+    ...range.map(p => p === "…"
+      ? `<span class="page-ellipsis">…</span>`
+      : `<button class="page-btn ${p===cur?"active":""}" data-p="${p}">${p}</button>`
+    ),
+    `<button class="page-btn" data-p="${cur+1}" ${cur===total_pages?"disabled":""}>›</button>`,
+  ].join("");
+  container.querySelectorAll("[data-p]").forEach(btn =>
+    btn.addEventListener("click", () => onPageClick(Number(btn.dataset.p)))
   );
-  elements.filteredCount.textContent = estimatedTotal.toLocaleString("pt-BR");
-  elements.progress.style.width = `${Math.max(
-    4,
-    (filteredRecords.length / records.length) * 100,
-  )}%`;
-
-  renderActiveFilters(filters);
 }
 
-function renderActiveFilters(filters) {
-  const chips = [];
+// ── Router ──────────────────────────────────────────────────────────────────
+const VIEWS_WITH_SIDEBAR = ["dashboard", "talhoes"];
+let currentView = "";
 
-  if (filters.unit !== "all") chips.push(`Unidade: ${filters.unit}`);
-  if (filters.process !== "all") {
-    chips.push(`Processo: ${labels.process[filters.process]}`);
-  }
-  if (filters.input !== "all") {
-    chips.push(
-      `Insumo: ${elements.input.options[elements.input.selectedIndex].text}`,
-    );
-  }
-  if (filters.status !== "all") {
-    chips.push(`Status: ${labels.status[filters.status]}`);
-  }
-  if (filters.search) chips.push(`Busca: "${elements.search.value.trim()}"`);
+function navigate(view) {
+  if (!["dashboard","talhoes","relatorios"].includes(view)) view = "dashboard";
+  if (view === currentView) return;
+  currentView = view;
 
-  elements.activeFilters.innerHTML = chips
-    .map((chip) => `<span class="filter-chip">${chip}</span>`)
-    .join("");
+  // Nav links
+  document.querySelectorAll(".nav-link").forEach(a =>
+    a.classList.toggle("active", a.dataset.view === view)
+  );
+
+  // Views
+  document.querySelectorAll(".view").forEach(v => v.hidden = true);
+  e(`view-${view}`).hidden = false;
+
+  // Sidebar panels
+  document.querySelectorAll(".sidebar-panel").forEach(p => p.hidden = true);
+  const panel = e(`sidebar-${view}`);
+  const hasSidebar = VIEWS_WITH_SIDEBAR.includes(view);
+  e("layout").classList.toggle("no-sidebar", !hasSidebar);
+  if (hasSidebar && panel) panel.hidden = false;
+
+  // Load data
+  if (view === "talhoes" && !talhoesState.loaded) refreshTalhoes();
+  if (view === "relatorios" && !relatorioLoaded)  loadRelatorio();
 }
 
-function resetFilters() {
-  elements.search.value = "";
-  elements.unit.value = "all";
-  elements.process.value = "all";
-  elements.input.value = "all";
-  elements.status.value = "all";
-  renderRecords();
-  showToast("Filtros removidos");
+// ── API fetch helpers ────────────────────────────────────────────────────────
+async function apiFetch(path) {
+  const res = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
 }
 
-function escapeCsvValue(value) {
-  return `"${String(value).replace(/"/g, '""')}"`;
+function filterStr(f, extra = {}) {
+  return new URLSearchParams({ ...f, ...extra }).toString();
 }
 
-function exportCsv() {
-  if (!filteredRecords.length) {
-    showToast("Nao ha registros para exportar");
-    return;
-  }
-
-  const headers = [
-    "id_talhao",
-    "unidade",
-    "processo",
-    "orientacao",
-    "insumo",
-    "dose_kg_ha",
-    "regra_acionada",
-    "data_geracao",
-    "status",
-  ];
-
-  const rows = filteredRecords.map((record) => [
-    record.id,
-    record.unit,
-    record.process,
-    record.orientation,
-    record.inputLabel,
-    record.dose,
-    record.rule,
-    record.date,
-    labels.status[record.status],
-  ]);
-
-  const csv = [headers, ...rows]
-    .map((row) => row.map(escapeCsvValue).join(";"))
-    .join("\n");
-  const blob = new Blob(["\uFEFF", csv], {
-    type: "text/csv;charset=utf-8;",
+function demoFilter(recs, f) {
+  const s = (f.search || "").toLowerCase();
+  return recs.filter(r => {
+    if (f.unit     && f.unit     !== "all" && r.unidade     !== f.unit)      return false;
+    if (f.processo && f.processo !== "all" && r.processo    !== f.processo)  return false;
+    if (f.status   && f.status   !== "all" && r.status      !== f.status)    return false;
+    if (f.status_geral && f.status_geral !== "all" && r.status_geral !== f.status_geral) return false;
+    if (s) {
+      const hay = [r.id_talhao,r.chave,r.unidade,r.processo,
+                   r.orientacao,r.regra_acionada,r.insumo||""].join(" ").toLowerCase();
+      if (!hay.includes(s)) return false;
+    }
+    return true;
   });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `orientacoes_atvos_${new Date()
-    .toISOString()
-    .slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  showToast(`${filteredRecords.length} registros exportados`);
 }
 
-function showToast(message) {
-  window.clearTimeout(toastTimer);
-  elements.toast.textContent = message;
-  elements.toast.classList.add("is-visible");
-  toastTimer = window.setTimeout(() => {
-    elements.toast.classList.remove("is-visible");
-  }, 2400);
+function demoPage(arr, page) {
+  const total = arr.length;
+  const pages = Math.max(1, Math.ceil(total / PER));
+  const p     = Math.min(page, pages);
+  return { records: arr.slice((p-1)*PER, p*PER), total, page: p, total_pages: pages };
 }
 
-function toggleMobileFilters() {
-  const isOpen = elements.filtersPanel.classList.toggle("is-open");
-  elements.mobileFilter.setAttribute("aria-expanded", String(isOpen));
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+
+async function refreshDash() {
+  const f   = dashState.filters;
+  const qs  = filterStr({ page: dashState.page, per_page: PER, ...f });
+  let result;
+
+  if (isDemo) {
+    result = demoPage(demoFilter(DEMO_RECS, f), dashState.page);
+  } else {
+    try {
+      result = await apiFetch(`/data?${qs}`);
+    } catch {
+      isDemo = true; toast("API offline — modo demonstração");
+      result = demoPage(demoFilter(DEMO_RECS, f), dashState.page);
+    }
+  }
+
+  dashState.total       = result.total;
+  dashState.total_pages = result.total_pages;
+  dashState.page        = result.page;
+
+  renderDashTable(result.records);
+  renderPagination("d-pagination", dashState.page, dashState.total_pages, p => {
+    dashState.page = p; refreshDash();
+  });
+  renderDashChips();
+  e("d-showing").textContent = result.records.length.toLocaleString("pt-BR");
+  e("d-total").textContent   = result.total.toLocaleString("pt-BR");
 }
 
-[
-  elements.unit,
-  elements.process,
-  elements.input,
-  elements.status,
-].forEach((select) => select.addEventListener("change", renderRecords));
+function renderDashTable(rows) {
+  e("d-empty").hidden = rows.length > 0;
+  if (!rows.length) { e("d-tbody").innerHTML = ""; return; }
+  e("d-tbody").innerHTML = rows.map((r, i) => {
+    const dose = r.dose_kg_ha
+      ? Number(r.dose_kg_ha).toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+      : "—";
+    return `<tr${r.status==="urgent"?' class="row-urgent"':""}>
+      <td title="${esc(r.chave)}">${esc(r.id_talhao)}</td>
+      <td>${esc(r.unidade)}</td>
+      <td><span class="process-tag">${esc(PROC[r.processo]||r.processo)}</span></td>
+      <td title="${esc(r.orientacao)}">${esc(r.orientacao)}</td>
+      <td title="${esc(r.insumo)}">${esc(r.insumo||"—")}</td>
+      <td>${esc(dose)}</td>
+      <td title="${esc(r.regra_acionada)}" style="max-width:150px">${esc(r.regra_acionada)}</td>
+      <td>${esc(r.data_geracao)}</td>
+      <td><span class="badge badge-${r.status}">${esc(STATUS[r.status]||r.status)}</span></td>
+      <td><button class="btn-ver" data-idx="${i}">Ver</button></td>
+    </tr>`;
+  }).join("");
+  e("d-tbody")._rows = rows;
+  e("d-tbody").querySelectorAll(".btn-ver").forEach(btn =>
+    btn.addEventListener("click", () => openDashModal(e("d-tbody")._rows[+btn.dataset.idx]))
+  );
+}
 
-elements.search.addEventListener("input", renderRecords);
-elements.reset.addEventListener("click", resetFilters);
-elements.export.addEventListener("click", exportCsv);
-elements.mobileFilter.addEventListener("click", toggleMobileFilters);
+function openDashModal(r) {
+  const fields = [
+    ["ID Talhão",      r.id_talhao],
+    ["Chave",          r.chave],
+    ["Unidade",        r.unidade],
+    ["Safra",          r.safra],
+    ["Processo",       PROC[r.processo]||r.processo],
+    ["Orientação",     r.orientacao],
+    ["Regra Acionada", r.regra_acionada],
+    ["Insumo",         r.insumo||"—"],
+    ["Dose kg/ha",     r.dose_kg_ha||"—"],
+    ["Qtd Total kg",   r.quantidade_total_kg||"—"],
+    ["Data Geração",   r.data_geracao],
+    ["Status",         STATUS[r.status]||r.status],
+  ];
+  openModal(`Talhão ${r.id_talhao}`,
+    `<dl class="modal-dl">${fields.map(([k,v])=>
+      `<div class="modal-row"><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`
+    ).join("")}</dl>`
+  );
+}
 
-renderRecords();
+function renderDashChips() {
+  const f = dashState.filters;
+  const items = [];
+  if (f.unit     !== "all") items.push(`Unidade: ${f.unit}`);
+  if (f.processo !== "all") items.push(`Processo: ${PROC[f.processo]||f.processo}`);
+  if (f.status   !== "all") items.push(`Status: ${STATUS[f.status]}`);
+  if (f.search)             items.push(`Busca: "${f.search}"`);
+  e("d-chips").innerHTML = items.map(t => `<span class="chip">${esc(t)}</span>`).join("");
+}
+
+function applyDash() {
+  dashState.filters = {
+    unit:     e("d-unit").value,
+    processo: e("d-processo").value,
+    status:   e("d-status").value,
+    search:   e("d-search").value.trim(),
+  };
+  dashState.page = 1;
+  refreshDash();
+}
+
+function clearDash() {
+  e("d-unit").value = e("d-processo").value = e("d-status").value = "all";
+  e("d-search").value = "";
+  dashState.filters = { unit:"all", processo:"all", status:"all", search:"" };
+  dashState.page = 1;
+  refreshDash();
+  toast("Filtros removidos");
+}
+
+function exportDash() {
+  if (isDemo) { toast("Exportação disponível apenas com a API ativa"); return; }
+  const f = dashState.filters;
+  window.location.href = `${API}/export?${filterStr(f)}`;
+  toast("Exportação iniciada");
+}
+
+// ── TALHÕES ──────────────────────────────────────────────────────────────────
+
+async function refreshTalhoes() {
+  talhoesState.loaded = true;
+  const f  = talhoesState.filters;
+  const qs = filterStr({ page: talhoesState.page, per_page: PER, ...f });
+  let result;
+
+  if (isDemo) {
+    const filtered = demoFilter(DEMO_TALHOES, { unit: f.unit, status_geral: f.status, search: f.search });
+    result = demoPage(filtered, talhoesState.page);
+  } else {
+    try {
+      result = await apiFetch(`/talhoes?${qs}`);
+    } catch {
+      isDemo = true; toast("API offline — modo demonstração");
+      const filtered = demoFilter(DEMO_TALHOES, { unit: f.unit, status_geral: f.status, search: f.search });
+      result = demoPage(filtered, talhoesState.page);
+    }
+  }
+
+  talhoesState.total       = result.total;
+  talhoesState.total_pages = result.total_pages;
+  talhoesState.page        = result.page;
+
+  renderTalhoesTable(result.records);
+  renderPagination("t-pagination", talhoesState.page, talhoesState.total_pages, p => {
+    talhoesState.page = p; refreshTalhoes();
+  });
+  renderTalhoesChips();
+  e("t-showing").textContent = result.records.length.toLocaleString("pt-BR");
+  e("t-total").textContent   = result.total.toLocaleString("pt-BR");
+}
+
+function renderTalhoesTable(rows) {
+  e("t-empty").hidden = rows.length > 0;
+  if (!rows.length) { e("t-tbody").innerHTML = ""; return; }
+
+  e("t-tbody").innerHTML = rows.map((t, i) => {
+    const pills = (t.alertas||[]).map(p => {
+      const procRecords = isDemo ? DEMO_RECS.filter(r => r.id_talhao===t.id_talhao&&r.processo===p) : [];
+      const s = procRecords[0]?.status || "attention";
+      return `<span class="alert-pill pill-${s}">${esc(PROC[p]||p)}</span>`;
+    }).join("") || `<span style="color:var(--text-300);font-size:11px">Nenhum</span>`;
+
+    return `<tr${t.status_geral==="urgent"?' class="row-urgent"':""}>
+      <td>${esc(t.id_talhao)}</td>
+      <td>${esc(t.chave)}</td>
+      <td>${esc(t.unidade)}</td>
+      <td>${esc(t.safra)}</td>
+      <td><span class="badge badge-${t.status_geral}">${esc(STATUS[t.status_geral]||t.status_geral)}</span></td>
+      <td style="max-width:300px;white-space:normal"><div class="alert-pills">${pills}</div></td>
+      <td><button class="btn-ver" data-idx="${i}">Ver processos</button></td>
+    </tr>`;
+  }).join("");
+
+  e("t-tbody")._rows = rows;
+  e("t-tbody").querySelectorAll(".btn-ver").forEach(btn =>
+    btn.addEventListener("click", () => openTalhaoModal(e("t-tbody")._rows[+btn.dataset.idx]))
+  );
+}
+
+async function openTalhaoModal(t) {
+  let procs;
+  if (isDemo) {
+    procs = DEMO_RECS.filter(r => r.id_talhao === t.id_talhao);
+  } else {
+    try {
+      const data = await apiFetch(`/talhao?id=${encodeURIComponent(t.id_talhao)}`);
+      procs = data.records;
+    } catch {
+      procs = [];
+      toast("Erro ao carregar processos");
+    }
+  }
+
+  const meta = `
+    <dl class="modal-talhao-meta">
+      <div class="meta-item"><dt>ID Talhão</dt><dd>${esc(t.id_talhao)}</dd></div>
+      <div class="meta-item"><dt>Unidade</dt><dd>${esc(t.unidade)}</dd></div>
+      <div class="meta-item"><dt>Safra</dt><dd>${esc(t.safra)}</dd></div>
+    </dl>`;
+
+  const list = procs.length
+    ? `<div class="proc-list">${procs.map(r => `
+        <div class="proc-item">
+          <div>
+            <div class="proc-item-name">${esc(PROC[r.processo]||r.processo)}</div>
+            <div class="proc-item-ori">${esc(r.orientacao)}</div>
+            <div class="proc-item-regra">${esc(r.regra_acionada)}${r.dose_kg_ha ? ` · ${esc(r.dose_kg_ha)} kg/ha` : ""}</div>
+          </div>
+          <span class="badge badge-${r.status}">${esc(STATUS[r.status]||r.status)}</span>
+        </div>`).join("")}</div>`
+    : `<p style="color:var(--text-500);font-size:13px">Nenhum processo encontrado.</p>`;
+
+  openModal(`Talhão ${t.id_talhao}`, meta + list);
+}
+
+function renderTalhoesChips() {
+  const f = talhoesState.filters;
+  const items = [];
+  if (f.unit   !== "all") items.push(`Unidade: ${f.unit}`);
+  if (f.status !== "all") items.push(`Status: ${STATUS[f.status]}`);
+  if (f.search)           items.push(`Busca: "${f.search}"`);
+  e("t-chips").innerHTML = items.map(t => `<span class="chip">${esc(t)}</span>`).join("");
+}
+
+function applyTalhoes() {
+  talhoesState.filters = {
+    unit:   e("t-unit").value,
+    status: e("t-status").value,
+    search: e("t-search").value.trim(),
+  };
+  talhoesState.page = 1;
+  refreshTalhoes();
+}
+
+function clearTalhoes() {
+  e("t-unit").value = e("t-status").value = "all";
+  e("t-search").value = "";
+  talhoesState.filters = { unit:"all", status:"all", search:"" };
+  talhoesState.page = 1;
+  refreshTalhoes();
+  toast("Filtros removidos");
+}
+
+// ── RELATÓRIOS ───────────────────────────────────────────────────────────────
+
+async function loadRelatorio() {
+  relatorioLoaded = true;
+  let data;
+
+  if (isDemo) {
+    data = DEMO_RELATORIO;
+  } else {
+    try {
+      data = await apiFetch("/relatorio");
+    } catch {
+      isDemo = true; toast("API offline — modo demonstração");
+      data = DEMO_RELATORIO;
+    }
+  }
+
+  try {
+    renderRelatorio(data);
+  } finally {
+    e("relatorio-loading").hidden = true;
+    e("relatorio-content").hidden = false;
+  }
+}
+
+function renderRelatorio(data) {
+  const totalAll = data.por_processo.reduce((s, p) => s + p.total, 0) || 1;
+
+  // Por processo
+  e("r-proc-tbody").innerHTML = data.por_processo.map(p => `
+    <tr>
+      <td><strong>${esc(p.label||p.processo)}</strong></td>
+      <td class="num-col">${p.total.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.urgent    ? "num-urgent"    : ""}">${p.urgent.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.attention ? "num-attention" : ""}">${p.attention.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.monitor   ? "num-monitor"   : ""}">${p.monitor.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.ok        ? "num-ok"        : ""}">${p.ok.toLocaleString("pt-BR")}</td>
+      <td class="num-col">${p.sem_dado.toLocaleString("pt-BR")}</td>
+    </tr>`).join("");
+
+  // Por unidade
+  e("r-unit-tbody").innerHTML = data.por_unidade.map(u => `
+    <tr>
+      <td><strong>${esc(u.unidade)}</strong></td>
+      <td class="num-col">${u.total_talhoes.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${u.urgent    ? "num-urgent"    : ""}">${u.urgent.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${u.attention ? "num-attention" : ""}">${u.attention.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${u.monitor   ? "num-monitor"   : ""}">${u.monitor.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${u.ok        ? "num-ok"        : ""}">${u.ok.toLocaleString("pt-BR")}</td>
+    </tr>`).join("");
+
+  // Top regras
+  const maxReg = data.top_regras[0]?.total || 1;
+  e("r-regras-tbody").innerHTML = data.top_regras.map((r, i) => `
+    <tr>
+      <td class="num-col">${i + 1}</td>
+      <td title="${esc(r.regra)}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.regra)}</td>
+      <td class="num-col">${r.total.toLocaleString("pt-BR")}</td>
+      <td class="num-col">${r.pct}%</td>
+      <td class="bar-cell">
+        <div class="mini-bar-wrap">
+          <div class="mini-bar" style="width:${Math.round(r.total/maxReg*100)}%"></div>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+// ── Inicialização ────────────────────────────────────────────────────────────
+async function init() {
+  let meta = DEMO_META;
+  try {
+    meta = await apiFetch("/stats");
+  } catch {
+    isDemo = true;
+    toast("API offline — exibindo dados de demonstração");
+  }
+
+  e("kpi-talhoes").textContent  = meta.total_talhoes.toLocaleString("pt-BR");
+  e("kpi-urgent").textContent   = meta.urgent.toLocaleString("pt-BR");
+  e("kpi-attention").textContent = meta.attention.toLocaleString("pt-BR");
+  e("kpi-processos").textContent = meta.processos.length;
+
+  const safra = "2026/27";
+  e("navbar-safra").textContent = `Safra ${safra}`;
+  e("d-footer").textContent     = `Camada Gold · Safra ${safra}`;
+
+  // Popula selects do Dashboard
+  meta.unidades.forEach(u => {
+    e("d-unit").add(new Option(u, u));
+    e("t-unit").add(new Option(u, u));
+  });
+  meta.processos.forEach(p => e("d-processo").add(new Option(PROC[p]||p, p)));
+
+  // Navegação hash
+  const hash = location.hash.replace("#","") || "dashboard";
+  navigate(hash);
+  await refreshDash();
+}
+
+// ── Eventos globais ──────────────────────────────────────────────────────────
+
+// Nav links
+document.querySelectorAll(".nav-link").forEach(a =>
+  a.addEventListener("click", e => { e.preventDefault(); navigate(a.dataset.view); })
+);
+
+// Dashboard
+e("d-apply").addEventListener("click",  applyDash);
+e("d-clear-top").addEventListener("click", clearDash);
+e("d-clear").addEventListener("click",  clearDash);
+e("d-export").addEventListener("click", exportDash);
+e("d-search").addEventListener("keydown", ev => { if (ev.key === "Enter") applyDash(); });
+
+// Talhões
+e("t-apply").addEventListener("click",     applyTalhoes);
+e("t-clear-top").addEventListener("click", clearTalhoes);
+e("t-clear").addEventListener("click",     clearTalhoes);
+e("t-search").addEventListener("keydown",  ev => { if (ev.key === "Enter") applyTalhoes(); });
+
+// Modal
+e("modal-close").addEventListener("click", closeModal);
+e("modal").addEventListener("click", ev => { if (ev.target === e("modal")) closeModal(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeModal(); });
+
+// Hash routing (botão back/forward do browser)
+window.addEventListener("hashchange", () =>
+  navigate(location.hash.replace("#","") || "dashboard")
+);
+
+init();

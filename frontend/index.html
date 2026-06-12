@@ -1,255 +1,413 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Painel de monitoramento agronômico dos talhoes Atvos."
-    />
-    <title>Atvos | Monitor Agronomico</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <span class="brand-divider"></span>
-          <strong>Atvos</strong>
-          <span class="brand-product">Monitor Agronomico</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atvos | Monitor Agronomico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── NAVBAR ──────────────────────────────────────────────────────── -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="brand-logo" aria-hidden="true">
+          <span></span><span></span><span></span>
         </div>
+        <span class="brand-name">Atvos</span>
+        <span class="brand-divider"></span>
+        <span class="brand-sub">Monitor Agronomico</span>
+      </div>
 
-        <div class="topbar-meta">
-          <span>Safra 2026/25</span>
-          <span class="meta-divider"></span>
-          <span>Gerado em <strong>08/06/2026</strong></span>
-          <span class="pipeline-status">
-            <span class="status-dot"></span>
-            Pipeline OK
-          </span>
-        </div>
-      </header>
+      <nav class="navbar-links" aria-label="Navegação principal">
+        <a href="#dashboard" class="nav-link" data-view="dashboard">Dashboard</a>
+        <a href="#talhoes"   class="nav-link" data-view="talhoes">Talhões</a>
+        <a href="#relatorios" class="nav-link" data-view="relatorios">Relatórios</a>
+      </nav>
 
-      <button
-        class="mobile-filter-button"
-        id="mobile-filter-button"
-        type="button"
-        aria-expanded="false"
-        aria-controls="filters-panel"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16M7 12h10M10 18h4" />
-        </svg>
-        Filtros
-      </button>
-
-      <div class="dashboard-layout">
-        <aside class="filters-panel" id="filters-panel">
-          <div class="filters-heading">
-            <div>
-              <span class="eyebrow">Filtros</span>
-              <h2>Refine os resultados</h2>
-            </div>
-            <button class="reset-button" id="reset-filters" type="button">
-              Limpar
-            </button>
+      <div class="navbar-right">
+        <span class="navbar-safra" id="navbar-safra">Safra —</span>
+        <div class="navbar-divider"></div>
+        <button class="icon-btn" aria-label="Notificações" title="Notificações">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </button>
+        <div class="navbar-divider"></div>
+        <div class="user-section">
+          <div class="avatar" aria-hidden="true">AT</div>
+          <div class="user-info">
+            <span class="user-name">Atvos G1</span>
+            <span class="user-role">Agrônomo</span>
           </div>
+        </div>
+      </div>
+    </header>
 
-          <label class="field">
-            <span>Unidade Industrial</span>
-            <select id="unit-filter">
-              <option value="all">Todas</option>
-              <option value="UMV">UMV</option>
-              <option value="URC">URC</option>
-              <option value="UEL">UEL</option>
-              <option value="UCP">UCP</option>
-            </select>
-          </label>
+    <!-- ── LAYOUT ──────────────────────────────────────────────────────── -->
+    <div class="layout" id="layout">
 
-          <label class="field">
-            <span>Processo Agronomico</span>
-            <select id="process-filter">
-              <option value="all">Todos</option>
-              <option value="calagem">Calagem</option>
-              <option value="gessagem">Gessagem</option>
-              <option value="fosfatagem">Fosfatagem</option>
-              <option value="erradicacao">Erradicacao</option>
-              <option value="janela_plantio">Janela de plantio</option>
-            </select>
-          </label>
+      <!-- ── SIDEBAR ───────────────────────────────────────────────────── -->
+      <aside class="sidebar" id="sidebar" aria-label="Filtros">
 
-          <label class="field">
-            <span>Tipo de Insumo</span>
-            <select id="input-filter">
-              <option value="all">Todos</option>
-              <option value="calcario">Calcario</option>
-              <option value="gesso">Gesso agricola</option>
-              <option value="fosforo">Fosforo</option>
-              <option value="mudas">Mudas</option>
-              <option value="none">Sem insumo</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Status de Alerta</span>
-            <select id="status-filter">
-              <option value="all">Todos</option>
-              <option value="urgent">Urgente</option>
-              <option value="attention">Atencao</option>
-              <option value="monitor">Monitorar</option>
-              <option value="ok">Sem alerta</option>
-            </select>
-          </label>
-
-          <div class="result-summary">
-            <strong id="filtered-count">67.426</strong>
-            <span>talhoes encontrados</span>
-            <div class="summary-bar">
-              <span id="summary-progress"></span>
+        <!-- Painel: Dashboard -->
+        <div class="sidebar-panel" id="sidebar-dashboard">
+          <div class="sidebar-header">
+            <h2>Filtros</h2>
+            <button class="link-btn" id="d-clear-top" type="button">Limpar</button>
+          </div>
+          <hr class="sidebar-divider" />
+          <div class="filter-group">
+            <label class="filter-label" for="d-search">Buscar</label>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <input id="d-search" type="search" placeholder="Buscar talhão..." autocomplete="off" />
             </div>
           </div>
-        </aside>
+          <div class="filter-group">
+            <label class="filter-label" for="d-unit">Unidade Industrial</label>
+            <div class="select-wrap">
+              <select id="d-unit"><option value="all">Todas as unidades</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="d-processo">Processo Agronomico</label>
+            <div class="select-wrap">
+              <select id="d-processo"><option value="all">Todos os processos</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="d-status">Status de Alerta</label>
+            <div class="select-wrap">
+              <select id="d-status">
+                <option value="all">Todos os status</option>
+                <option value="urgent">Urgente</option>
+                <option value="attention">Atenção</option>
+                <option value="monitor">Monitorar</option>
+                <option value="ok">OK</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" id="d-apply" type="button">Aplicar filtros</button>
+          <button class="btn-ghost"   id="d-clear" type="button">Limpar filtros</button>
+        </div>
 
-        <main class="dashboard-content">
-          <section class="metrics-grid" aria-label="Indicadores principais">
-            <article class="metric-card metric-green">
-              <div class="metric-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M5 20V9m7 11V4m7 16v-7M3 20h18" />
-                </svg>
+        <!-- Painel: Talhões -->
+        <div class="sidebar-panel" id="sidebar-talhoes" hidden>
+          <div class="sidebar-header">
+            <h2>Filtros</h2>
+            <button class="link-btn" id="t-clear-top" type="button">Limpar</button>
+          </div>
+          <hr class="sidebar-divider" />
+          <div class="filter-group">
+            <label class="filter-label" for="t-search">Buscar ID ou Chave</label>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <input id="t-search" type="search" placeholder="Ex: 410149..." autocomplete="off" />
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="t-unit">Unidade Industrial</label>
+            <div class="select-wrap">
+              <select id="t-unit"><option value="all">Todas as unidades</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="t-status">Status Geral</label>
+            <div class="select-wrap">
+              <select id="t-status">
+                <option value="all">Todos os status</option>
+                <option value="urgent">Urgente</option>
+                <option value="attention">Atenção</option>
+                <option value="monitor">Monitorar</option>
+                <option value="ok">OK</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" id="t-apply" type="button">Aplicar filtros</button>
+          <button class="btn-ghost"   id="t-clear" type="button">Limpar filtros</button>
+        </div>
+
+      </aside>
+
+      <!-- ── CONTEÚDO PRINCIPAL ────────────────────────────────────────── -->
+      <main class="main-content">
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: DASHBOARD                                               -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-dashboard">
+
+          <section class="kpi-grid" aria-label="Indicadores principais">
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Total de Talhões</span>
+                <div class="kpi-icon icon-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M5 20V9m7 11V4m7 16v-7M3 20h18"/>
+                  </svg>
+                </div>
               </div>
-              <div>
-                <strong id="total-fields">67.426</strong>
-                <span>Total de Talhoes</span>
-                <small>Inventario ativo</small>
-              </div>
+              <div class="kpi-value" id="kpi-talhoes">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-green">Inventário ativo</span></div>
             </article>
 
-            <article class="metric-card metric-red">
-              <div class="metric-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 9v4m0 4h.01M10.3 3.8 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" />
-                </svg>
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Intervenções Urgentes</span>
+                <div class="kpi-icon icon-red" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M12 9v4m0 4h.01M10.3 3.8 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z"/>
+                  </svg>
+                </div>
               </div>
-              <div>
-                <strong id="urgent-count">1.842</strong>
-                <span>Intervencoes Urgentes</span>
-                <small>pH critico / erradicacao</small>
-              </div>
+              <div class="kpi-value color-red" id="kpi-urgent">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-red">pH crítico / erradicação</span></div>
             </article>
 
-            <article class="metric-card metric-blue">
-              <div class="metric-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="m5 12 4 4L19 6M4 4h16v16H4z" />
-                </svg>
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Atenção Necessária</span>
+                <div class="kpi-icon icon-amber" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
+                  </svg>
+                </div>
               </div>
-              <div>
-                <strong>5 / 5</strong>
-                <span>Processos Cobertos</span>
-                <small>motor de regras ativo</small>
-              </div>
+              <div class="kpi-value color-amber" id="kpi-attention">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-amber">Dados ausentes / revisão</span></div>
             </article>
 
-            <article class="metric-card metric-purple">
-              <div class="metric-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M4 18 9 8l4 6 3-5 4 9M3 20h18" />
-                </svg>
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Processos Cobertos</span>
+                <div class="kpi-icon icon-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="m5 12 4 4L19 6"/>
+                  </svg>
+                </div>
               </div>
-              <div>
-                <strong>72,4 <em>t/ha</em></strong>
-                <span>Safra Estimada (avg)</span>
-                <small>TCH estimado medio</small>
-              </div>
+              <div class="kpi-value color-blue" id="kpi-processos">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-blue">Motor de regras ativo</span></div>
             </article>
           </section>
 
-          <section class="table-card">
+          <section class="table-card" aria-label="Orientações por talhão">
             <div class="table-toolbar">
               <div>
                 <span class="eyebrow">Monitoramento</span>
-                <h1>Orientacoes por Talhao</h1>
-                <p>
-                  Exibindo <strong id="visible-records">0</strong> de 67.426
-                  registros
-                </p>
+                <h1 class="table-heading">Orientações por Talhão</h1>
+                <p class="table-meta">Exibindo <strong id="d-showing">0</strong> de <strong id="d-total">0</strong> registros</p>
               </div>
-
-              <div class="table-actions">
-                <label class="search-box">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7"></circle>
-                    <path d="m20 20-4-4"></path>
-                  </svg>
-                  <input
-                    id="search-input"
-                    type="search"
-                    placeholder="Buscar talhao..."
-                    autocomplete="off"
-                  />
-                </label>
-                <button class="export-button" id="export-button" type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" />
-                  </svg>
-                  Exportar CSV
-                </button>
-              </div>
+              <button class="btn-export" id="d-export" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/>
+                </svg>
+                Exportar CSV
+              </button>
             </div>
-
-            <div class="active-filters" id="active-filters" aria-live="polite"></div>
-
-            <div class="table-wrapper">
+            <div class="active-chips" id="d-chips" aria-live="polite"></div>
+            <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Id_talhao</th>
+                    <th>ID Talhão</th>
                     <th>Unidade</th>
                     <th>Processo</th>
-                    <th>Orientacao</th>
+                    <th>Orientação</th>
                     <th>Insumo</th>
-                    <th>Dose_kg_ha</th>
-                    <th>Regra_acionada</th>
-                    <th>Data_geracao</th>
+                    <th>Dose kg/ha</th>
+                    <th>Regra Acionada</th>
+                    <th>Data</th>
                     <th>Status</th>
+                    <th>Ações</th>
                   </tr>
                 </thead>
-                <tbody id="records-body"></tbody>
+                <tbody id="d-tbody"></tbody>
               </table>
             </div>
-
-            <div class="empty-state" id="empty-state" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"></circle>
-                <path d="m20 20-4-4"></path>
+            <div class="empty-state" id="d-empty" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
               </svg>
-              <h3>Nenhum talhao encontrado</h3>
-              <p>Ajuste os filtros ou tente outro termo de busca.</p>
+              <h3>Nenhum resultado encontrado</h3>
+              <p>Ajuste os filtros ou tente outro termo.</p>
             </div>
-
-            <footer class="table-footer">
-              <span>Dados demonstrativos baseados na camada Gold</span>
-              <span class="last-update">Atualizado agora</span>
-            </footer>
+            <div class="table-footer">
+              <span class="footer-meta" id="d-footer">Camada Gold · Safra —</span>
+              <nav class="pagination" id="d-pagination" aria-label="Paginação"></nav>
+            </div>
           </section>
-        </main>
-      </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: TALHÕES                                                 -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-talhoes" hidden>
+          <section class="table-card" aria-label="Inventário de talhões">
+            <div class="table-toolbar">
+              <div>
+                <span class="eyebrow">Inventário</span>
+                <h1 class="table-heading">Todos os Talhões</h1>
+                <p class="table-meta">Exibindo <strong id="t-showing">0</strong> de <strong id="t-total">0</strong> talhões</p>
+              </div>
+            </div>
+            <div class="active-chips" id="t-chips" aria-live="polite"></div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID Talhão</th>
+                    <th>Chave</th>
+                    <th>Unidade</th>
+                    <th>Safra</th>
+                    <th>Status Geral</th>
+                    <th>Processos Alertados</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="t-tbody"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="t-empty" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <h3>Nenhum talhão encontrado</h3>
+              <p>Ajuste os filtros ou tente outro ID.</p>
+            </div>
+            <div class="table-footer">
+              <span class="footer-meta">Silver · 67.426 talhões no inventário</span>
+              <nav class="pagination" id="t-pagination" aria-label="Paginação"></nav>
+            </div>
+          </section>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: RELATÓRIOS                                              -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-relatorios" hidden>
+
+          <div id="relatorio-loading" class="loading-state">
+            <div class="spinner" aria-label="Carregando..."></div>
+            <p>Calculando relatório...</p>
+          </div>
+
+          <div id="relatorio-content" hidden>
+
+            <section class="table-card report-card" aria-label="Por processo">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Análise</span>
+                  <h1 class="table-heading">Distribuição por Processo</h1>
+                  <p class="table-meta">Contagem de registros por processo agronomico e status</p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Processo</th>
+                      <th class="num-col">Total</th>
+                      <th class="num-col">Urgente</th>
+                      <th class="num-col">Atenção</th>
+                      <th class="num-col">Monitorar</th>
+                      <th class="num-col">OK</th>
+                      <th class="num-col">Sem Dado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-proc-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="table-card report-card" aria-label="Por unidade">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Análise</span>
+                  <h1 class="table-heading">Distribuição por Unidade Industrial</h1>
+                  <p class="table-meta">Talhões e alertas por unidade</p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Unidade</th>
+                      <th class="num-col">Talhões</th>
+                      <th class="num-col">Urgente</th>
+                      <th class="num-col">Atenção</th>
+                      <th class="num-col">Monitorar</th>
+                      <th class="num-col">OK</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-unit-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="table-card report-card" aria-label="Regras mais acionadas">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Diagnóstico</span>
+                  <h1 class="table-heading">Regras Mais Acionadas</h1>
+                  <p class="table-meta">Top 15 regras por frequência na camada Gold</p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th class="num-col" style="width:40px">#</th>
+                      <th>Regra</th>
+                      <th class="num-col">Total</th>
+                      <th class="num-col">% do total</th>
+                      <th style="min-width:180px">Proporção</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-regras-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+          </div>
+        </div>
+
+      </main>
     </div>
+  </div>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <!-- ── MODAL DE DETALHES ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal" role="dialog" aria-modal="true"
+       aria-labelledby="modal-title" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title">Detalhes</h2>
+        <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
 
-    <script src="script.js"></script>
-  </body>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
 </html>

@@ -41,10 +41,44 @@ O projeto roda localmente sem Google Cloud Platform. Alternativas:
 | BigQuery | **DuckDB** — SQL in-process sobre Parquet |
 | GCS | **Sistema de arquivos local** em `data/` |
 
+## Sprint 2 — Motor de Regras Agronômicas
+
+A Sprint 2 entregou a camada **Gold**: orientações agronômicas por talhão geradas por um motor de regras em Python.
+
+| Entregável | Status |
+|------------|--------|
+| Motor de regras (5 processos) | Feito |
+| Pipeline Silver → Gold | Feito |
+| 471.982 registros Gold | Feito |
+| Testes unitários | Feito |
+
+## Sprint 3 — Backend e API REST
+
+A Sprint 3 entregou o servidor HTTP que expõe os dados Gold para o frontend, sem dependências externas.
+
+| Entregável | Status |
+|------------|--------|
+| Servidor HTTP (stdlib Python) | Feito |
+| 6 endpoints JSON com filtros e paginação | Feito |
+| Pré-cômputo de agregados em memória | Feito |
+| 2 novos processos (insumos, dessecação) | Feito |
+
+## Sprint 4 — Frontend e Integração
+
+A Sprint 4 entregou a interface web completa com três telas e integração total com a API.
+
+| Entregável | Status |
+|------------|--------|
+| SPA com roteamento por hash | Feito |
+| Dashboard com KPIs e tabela filtrada | Feito |
+| Tela de Talhões com modal de detalhes | Feito |
+| Tela de Relatórios analíticos | Feito |
+| Modo de demonstração offline | Feito |
+
 ## Navegação
 
-Use o menu lateral para acessar a documentação da Sprint 1:
-- **Mapeamento de Fontes** — colunas, chaves, granularidade
-- **Regras de Limpeza** — as 5 categorias de nulos e transformações aplicadas
-- **Dicionário de Dados** — todas as 75 colunas da camada Silver documentadas
-- **Roteiro da Apresentação** — guia para apresentação com FAQ
+Use o menu lateral para acessar a documentação por sprint:
+- **Sprint 1** — Mapeamento de fontes, regras de limpeza e dicionário de dados Silver
+- **Sprint 2** — Arquitetura do motor de regras e especificação das regras agronômicas
+- **Sprint 3** — Arquitetura da API REST e referência de endpoints
+- **Sprint 4** — Arquitetura do frontend, telas da aplicação e design system
