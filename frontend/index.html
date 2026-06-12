@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Painel de monitoramento agronômico dos talhoes Atvos."
+    />
+    <title>Atvos | Monitor Agronomico</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="brand-divider"></span>
+          <strong>Atvos</strong>
+          <span class="brand-product">Monitor Agronomico</span>
+        </div>
+
+        <div class="topbar-meta">
+          <span>Safra 2026/25</span>
+          <span class="meta-divider"></span>
+          <span>Gerado em <strong>08/06/2026</strong></span>
+          <span class="pipeline-status">
+            <span class="status-dot"></span>
+            Pipeline OK
+          </span>
+        </div>
+      </header>
+
+      <button
+        class="mobile-filter-button"
+        id="mobile-filter-button"
+        type="button"
+        aria-expanded="false"
+        aria-controls="filters-panel"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M7 12h10M10 18h4" />
+        </svg>
+        Filtros
+      </button>
+
+      <div class="dashboard-layout">
+        <aside class="filters-panel" id="filters-panel">
+          <div class="filters-heading">
+            <div>
+              <span class="eyebrow">Filtros</span>
+              <h2>Refine os resultados</h2>
+            </div>
+            <button class="reset-button" id="reset-filters" type="button">
+              Limpar
+            </button>
+          </div>
+
+          <label class="field">
+            <span>Unidade Industrial</span>
+            <select id="unit-filter">
+              <option value="all">Todas</option>
+              <option value="UMV">UMV</option>
+              <option value="URC">URC</option>
+              <option value="UEL">UEL</option>
+              <option value="UCP">UCP</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Processo Agronomico</span>
+            <select id="process-filter">
+              <option value="all">Todos</option>
+              <option value="calagem">Calagem</option>
+              <option value="gessagem">Gessagem</option>
+              <option value="fosfatagem">Fosfatagem</option>
+              <option value="erradicacao">Erradicacao</option>
+              <option value="janela_plantio">Janela de plantio</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Tipo de Insumo</span>
+            <select id="input-filter">
+              <option value="all">Todos</option>
+              <option value="calcario">Calcario</option>
+              <option value="gesso">Gesso agricola</option>
+              <option value="fosforo">Fosforo</option>
+              <option value="mudas">Mudas</option>
+              <option value="none">Sem insumo</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Status de Alerta</span>
+            <select id="status-filter">
+              <option value="all">Todos</option>
+              <option value="urgent">Urgente</option>
+              <option value="attention">Atencao</option>
+              <option value="monitor">Monitorar</option>
+              <option value="ok">Sem alerta</option>
+            </select>
+          </label>
+
+          <div class="result-summary">
+            <strong id="filtered-count">67.426</strong>
+            <span>talhoes encontrados</span>
+            <div class="summary-bar">
+              <span id="summary-progress"></span>
+            </div>
+          </div>
+        </aside>
+
+        <main class="dashboard-content">
+          <section class="metrics-grid" aria-label="Indicadores principais">
+            <article class="metric-card metric-green">
+              <div class="metric-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M5 20V9m7 11V4m7 16v-7M3 20h18" />
+                </svg>
+              </div>
+              <div>
+                <strong id="total-fields">67.426</strong>
+                <span>Total de Talhoes</span>
+                <small>Inventario ativo</small>
+              </div>
+            </article>
+
+            <article class="metric-card metric-red">
+              <div class="metric-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 9v4m0 4h.01M10.3 3.8 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" />
+                </svg>
+              </div>
+              <div>
+                <strong id="urgent-count">1.842</strong>
+                <span>Intervencoes Urgentes</span>
+                <small>pH critico / erradicacao</small>
+              </div>
+            </article>
+
+            <article class="metric-card metric-blue">
+              <div class="metric-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="m5 12 4 4L19 6M4 4h16v16H4z" />
+                </svg>
+              </div>
+              <div>
+                <strong>5 / 5</strong>
+                <span>Processos Cobertos</span>
+                <small>motor de regras ativo</small>
+              </div>
+            </article>
+
+            <article class="metric-card metric-purple">
+              <div class="metric-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 18 9 8l4 6 3-5 4 9M3 20h18" />
+                </svg>
+              </div>
+              <div>
+                <strong>72,4 <em>t/ha</em></strong>
+                <span>Safra Estimada (avg)</span>
+                <small>TCH estimado medio</small>
+              </div>
+            </article>
+          </section>
+
+          <section class="table-card">
+            <div class="table-toolbar">
+              <div>
+                <span class="eyebrow">Monitoramento</span>
+                <h1>Orientacoes por Talhao</h1>
+                <p>
+                  Exibindo <strong id="visible-records">0</strong> de 67.426
+                  registros
+                </p>
+              </div>
+
+              <div class="table-actions">
+                <label class="search-box">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="m20 20-4-4"></path>
+                  </svg>
+                  <input
+                    id="search-input"
+                    type="search"
+                    placeholder="Buscar talhao..."
+                    autocomplete="off"
+                  />
+                </label>
+                <button class="export-button" id="export-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" />
+                  </svg>
+                  Exportar CSV
+                </button>
+              </div>
+            </div>
+
+            <div class="active-filters" id="active-filters" aria-live="polite"></div>
+
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Id_talhao</th>
+                    <th>Unidade</th>
+                    <th>Processo</th>
+                    <th>Orientacao</th>
+                    <th>Insumo</th>
+                    <th>Dose_kg_ha</th>
+                    <th>Regra_acionada</th>
+                    <th>Data_geracao</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="records-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty-state" id="empty-state" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-4-4"></path>
+              </svg>
+              <h3>Nenhum talhao encontrado</h3>
+              <p>Ajuste os filtros ou tente outro termo de busca.</p>
+            </div>
+
+            <footer class="table-footer">
+              <span>Dados demonstrativos baseados na camada Gold</span>
+              <span class="last-update">Atualizado agora</span>
+            </footer>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
