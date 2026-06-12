@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Painel de monitoramento agronômico da Atvos."
+    />
+    <title>Atvos - Monitor Agronômico</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Atvos - página inicial">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-divider" aria-hidden="true"></span>
+          <strong>Atvos</strong>
+          <span>Monitor Agronômico</span>
+        </a>
+
+        <div class="topbar-meta">
+          <span>Safra 2024/25</span>
+          <span class="meta-divider" aria-hidden="true"></span>
+          <span>Gerado em 08/06/2026</span>
+          <span class="status-pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            Pipeline OK
+          </span>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <aside class="filters-panel" aria-label="Filtros do painel">
+          <div class="filters-heading">
+            <span>Filtros</span>
+            <button id="clearFilters" class="text-button" type="button">
+              Limpar
+            </button>
+          </div>
+
+          <label class="field">
+            <span>Unidade Industrial</span>
+            <select id="unitFilter">
+              <option value="">Todas</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Processo Agronômico</span>
+            <select id="processFilter">
+              <option value="">Todos</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Tipo de Insumo</span>
+            <select id="inputFilter">
+              <option value="">Todos</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Status do Alerta</span>
+            <select id="statusFilter">
+              <option value="">Todos</option>
+              <option value="normal">Normal</option>
+              <option value="urgente">Urgente</option>
+            </select>
+          </label>
+
+          <div class="result-summary" aria-live="polite">
+            <strong id="resultCount">67.426</strong>
+            <span>talhões encontrados</span>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="metrics-grid" aria-label="Indicadores gerais">
+            <article class="metric-card metric-green">
+              <span class="metric-accent" aria-hidden="true"></span>
+              <strong>67.426</strong>
+              <span>Total de Talhões</span>
+              <small>inventário ativo</small>
+            </article>
+
+            <article class="metric-card metric-red">
+              <span class="metric-accent" aria-hidden="true"></span>
+              <strong>1.842</strong>
+              <span>Intervenções Urgentes</span>
+              <small>pH crítico / erradicação</small>
+            </article>
+
+            <article class="metric-card metric-blue">
+              <span class="metric-accent" aria-hidden="true"></span>
+              <strong>5 / 5</strong>
+              <span>Processos Cobertos</span>
+              <small>erosão, insumo, calagem...</small>
+            </article>
+
+            <article class="metric-card metric-purple">
+              <span class="metric-accent" aria-hidden="true"></span>
+              <strong>72,4 t/ha</strong>
+              <span>Safra Estimada (avg)</span>
+              <small>tonelada estimada média</small>
+            </article>
+          </div>
+
+          <section class="table-card">
+            <div class="table-toolbar">
+              <div>
+                <h1>Orientações por Talhão</h1>
+                <p id="tableDescription">
+                  Exibindo 6 de 67.426 registros
+                </p>
+              </div>
+
+              <div class="table-actions">
+                <label class="search-box">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"
+                    />
+                  </svg>
+                  <span class="sr-only">Buscar talhão</span>
+                  <input
+                    id="searchInput"
+                    type="search"
+                    placeholder="Buscar talhão..."
+                    autocomplete="off"
+                  />
+                </label>
+
+                <button id="exportButton" class="export-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+                  </svg>
+                  Exportar CSV
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>id_talhão</th>
+                    <th>unidade</th>
+                    <th>processo</th>
+                    <th>orientação</th>
+                    <th>insumo</th>
+                    <th>dose_kg_ha</th>
+                    <th>regra_acionada</th>
+                    <th>data_geração</th>
+                    <th>status</th>
+                  </tr>
+                </thead>
+                <tbody id="orientationRows"></tbody>
+              </table>
+            </div>
+
+            <div id="emptyState" class="empty-state" hidden>
+              <strong>Nenhum talhão encontrado</strong>
+              <span>Tente remover ou alterar os filtros.</span>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
