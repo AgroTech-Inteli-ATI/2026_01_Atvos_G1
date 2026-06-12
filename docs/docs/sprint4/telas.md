@@ -136,11 +136,41 @@ Os dados da tela de Talhões são carregados apenas na primeira visita (lazy-loa
 
 ## 4. Relatórios
 
-Tela analítica sem sidebar, com três tabelas de resumo. Os dados são carregados via `GET /api/relatorio` na primeira visita.
+Tela analítica sem sidebar. Os dados são carregados via `GET /api/relatorio` na primeira visita; um spinner animado é exibido enquanto a resposta não chega.
 
-Durante o carregamento, um spinner animado é exibido no centro da tela.
+Ao concluir o carregamento, a tela exibe um cabeçalho com título, data de geração e total de registros, seguido das três tabelas analíticas.
 
-### 4.1 Distribuição por Processo
+### 4.1 Toolbar e Exportação PDF
+
+A barra superior da tela contém o título **"Relatório de Monitoramento Agronômico"**, a data de geração (calculada no cliente) e o botão **Exportar PDF**.
+
+| Elemento | Descrição |
+|----------|-----------|
+| Título | Identificação do relatório e safra |
+| Data de geração | Data atual no formato `DD de mês de YYYY` |
+| Total de registros | Contagem total da camada Gold |
+| **Botão Exportar PDF** | Aciona `window.print()` com CSS de impressão dedicado |
+
+**Funcionamento do PDF:**
+
+```
+Usuário clica "Exportar PDF"
+    │
+    ├── exportRelatorio() atualiza o cabeçalho de impressão com data e total
+    │
+    └── window.print() → diálogo de impressão do navegador
+            │
+            ├── Impressora física → imprime relatório
+            └── "Salvar como PDF" → gera arquivo PDF local
+```
+
+O CSS `@media print` aplicado:
+- Oculta navbar, sidebar, botões e elementos de UI (`print-hide`)
+- Exibe cabeçalho dedicado com título e metadados (`print-only`)
+- Formata as tabelas com bordas sólidas e fonte reduzida para caber na página
+- Aplica `page-break-inside: avoid` em cada seção para evitar quebras no meio de tabelas
+
+### 4.2 Distribuição por Processo
 
 Tabela com uma linha por processo agronômico. Indica quantos registros estão em cada status e quantos retornam SEM_DADO por falta de dados de solo.
 
@@ -148,13 +178,13 @@ Tabela com uma linha por processo agronômico. Indica quantos registros estão e
 
 Os valores de contagem são coloridos de acordo com o status correspondente.
 
-### 4.2 Distribuição por Unidade
+### 4.3 Distribuição por Unidade
 
 Tabela com uma linha por unidade industrial. A coluna "Talhões" conta talhões únicos (não registros totais).
 
 **Colunas:** Unidade / Talhões / Urgente / Atenção / Monitorar / OK
 
-### 4.3 Top 15 Regras Acionadas
+### 4.4 Top 15 Regras Acionadas
 
 Tabela com as 15 regras mais frequentes em todo o Gold. Cada linha tem uma mini-barra de proporção visual.
 

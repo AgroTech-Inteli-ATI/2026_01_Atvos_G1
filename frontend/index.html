@@ -162,7 +162,10 @@
                 </div>
               </div>
               <div class="kpi-value" id="kpi-talhoes">—</div>
-              <div class="kpi-sub"><span class="trend-pill pill-green">Inventário ativo</span></div>
+              <div class="kpi-sub">
+                <span class="trend-pill pill-green">IDs únicos · todas as safras</span>
+              </div>
+              <p class="kpi-note" id="kpi-note-avaliacoes">— combinações talhão × safra</p>
             </article>
 
             <article class="kpi-card">
@@ -176,7 +179,7 @@
                 </div>
               </div>
               <div class="kpi-value color-red" id="kpi-urgent">—</div>
-              <div class="kpi-sub"><span class="trend-pill pill-red">pH crítico / erradicação</span></div>
+              <div class="kpi-sub"><span class="trend-pill pill-red">avaliações com risco imediato</span></div>
             </article>
 
             <article class="kpi-card">
@@ -190,7 +193,7 @@
                 </div>
               </div>
               <div class="kpi-value color-amber" id="kpi-attention">—</div>
-              <div class="kpi-sub"><span class="trend-pill pill-amber">Dados ausentes / revisão</span></div>
+              <div class="kpi-sub"><span class="trend-pill pill-amber">avaliações sem dado de solo</span></div>
             </article>
 
             <article class="kpi-card">
@@ -213,7 +216,7 @@
               <div>
                 <span class="eyebrow">Monitoramento</span>
                 <h1 class="table-heading">Orientações por Talhão</h1>
-                <p class="table-meta">Exibindo <strong id="d-showing">0</strong> de <strong id="d-total">0</strong> registros</p>
+                <p class="table-meta">Exibindo <strong id="d-showing">0</strong> de <strong id="d-total">0</strong> registros &nbsp;·&nbsp; <span class="meta-hint">1 linha = 1 processo em 1 talhão em 1 safra</span></p>
               </div>
               <button class="btn-export" id="d-export" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -294,7 +297,7 @@
               <p>Ajuste os filtros ou tente outro ID.</p>
             </div>
             <div class="table-footer">
-              <span class="footer-meta">Silver · 67.426 talhões no inventário</span>
+              <span class="footer-meta" id="t-footer-meta">Silver · talhões únicos no inventário</span>
               <nav class="pagination" id="t-pagination" aria-label="Paginação"></nav>
             </div>
           </section>
@@ -307,17 +310,47 @@
 
           <div id="relatorio-loading" class="loading-state">
             <div class="spinner" aria-label="Carregando..."></div>
-            <p>Calculando relatório...</p>
+            <p>Carregando relatório...</p>
           </div>
 
           <div id="relatorio-content" hidden>
+
+            <div class="relatorio-toolbar print-hide">
+              <div>
+                <span class="eyebrow">Análise consolidada</span>
+                <h1 class="table-heading">Relatório de Monitoramento Agronômico</h1>
+                <p class="table-meta" id="r-meta">Atvos · Camada Gold · <span id="r-data-geracao">—</span></p>
+              </div>
+              <button class="btn-export" id="r-pdf" type="button" onclick="exportRelatorio()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14,2 14,8 20,8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10,9 9,9 8,9"/>
+                </svg>
+                Exportar PDF
+              </button>
+            </div>
+
+            <!-- cabeçalho visível apenas na impressão -->
+            <div class="print-header print-only">
+              <h1>Relatório de Monitoramento Agronômico — Atvos</h1>
+              <p id="r-print-meta">Camada Gold</p>
+            </div>
+
+            <!-- fórmula explicativa dos números -->
+            <div class="r-formula print-hide" id="r-formula">
+              <!-- populado por renderRelatorio() -->
+            </div>
 
             <section class="table-card report-card" aria-label="Por processo">
               <div class="table-toolbar">
                 <div>
                   <span class="eyebrow">Análise</span>
                   <h1 class="table-heading">Distribuição por Processo</h1>
-                  <p class="table-meta">Contagem de registros por processo agronomico e status</p>
+                  <p class="table-meta">Avaliações por processo e status &nbsp;·&nbsp; <span class="meta-hint">1 avaliação = 1 talhão em 1 safra</span></p>
                 </div>
               </div>
               <div class="table-scroll">
@@ -325,12 +358,12 @@
                   <thead>
                     <tr>
                       <th>Processo</th>
-                      <th class="num-col">Total</th>
-                      <th class="num-col">Urgente</th>
-                      <th class="num-col">Atenção</th>
-                      <th class="num-col">Monitorar</th>
-                      <th class="num-col">OK</th>
-                      <th class="num-col">Sem Dado</th>
+                      <th class="num-col" title="Total de avaliações (talhão × safra) para este processo">Avaliações</th>
+                      <th class="num-col" title="Avaliações com status urgente (ex.: erradicação recomendada)">Urgente</th>
+                      <th class="num-col" title="Avaliações com atenção necessária (ex.: dado de solo ausente)">Atenção</th>
+                      <th class="num-col" title="Avaliações em monitoramento contínuo">Monitorar</th>
+                      <th class="num-col" title="Avaliações sem necessidade de intervenção">OK</th>
+                      <th class="num-col" title="Avaliações onde faltam dados de solo para gerar a orientação">Sem Dado</th>
                     </tr>
                   </thead>
                   <tbody id="r-proc-tbody"></tbody>
@@ -343,7 +376,7 @@
                 <div>
                   <span class="eyebrow">Análise</span>
                   <h1 class="table-heading">Distribuição por Unidade Industrial</h1>
-                  <p class="table-meta">Talhões e alertas por unidade</p>
+                  <p class="table-meta">Talhões únicos e status por unidade &nbsp;·&nbsp; <span class="meta-hint">Talhões = IDs distintos na unidade</span></p>
                 </div>
               </div>
               <div class="table-scroll">
@@ -351,11 +384,11 @@
                   <thead>
                     <tr>
                       <th>Unidade</th>
-                      <th class="num-col">Talhões</th>
-                      <th class="num-col">Urgente</th>
-                      <th class="num-col">Atenção</th>
-                      <th class="num-col">Monitorar</th>
-                      <th class="num-col">OK</th>
+                      <th class="num-col" title="Talhões únicos (IDs distintos) nesta unidade industrial">Talhões únicos</th>
+                      <th class="num-col" title="Avaliações com status urgente (soma de todos os processos)">Urgente</th>
+                      <th class="num-col" title="Avaliações com atenção necessária (soma de todos os processos)">Atenção</th>
+                      <th class="num-col" title="Avaliações em monitoramento (soma de todos os processos)">Monitorar</th>
+                      <th class="num-col" title="Avaliações sem necessidade de intervenção (soma de todos os processos)">OK</th>
                     </tr>
                   </thead>
                   <tbody id="r-unit-tbody"></tbody>

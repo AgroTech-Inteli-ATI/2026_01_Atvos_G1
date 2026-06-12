@@ -118,7 +118,7 @@ O terminal exibirá uma linha confirmando o endereço:
 [HH:MM:SS]  Monitor Agronomico API  →  http://localhost:8000
 ```
 
-O carregamento dos 471 mil registros leva alguns segundos na primeira requisição.
+O servidor carrega os 471 mil registros na inicialização (antes de aceitar conexões). Aguarde a mensagem de confirmação no terminal antes de abrir o browser.
 
 ### 5. Abrir o frontend
 
@@ -144,7 +144,9 @@ Visão consolidada por talhão — uma linha por ID com o pior status dentre tod
 
 ### Relatórios
 
-Tela analítica com três tabelas: distribuição de registros por processo agronomico (com contagem por status e sem-dado), distribuição por unidade industrial e as quinze regras mais acionadas com barra de proporção visual.
+Tela analítica com cabeçalho identificado ("Relatório de Monitoramento Agronômico") e três tabelas: distribuição de registros por processo agronomico (com contagem por status e sem-dado), distribuição por unidade industrial e as quinze regras mais acionadas com barra de proporção visual.
+
+O botão **Exportar PDF** no canto superior direito aciona `window.print()` com CSS de impressão dedicado que oculta navbar, sidebar e botões de interface, exibe um cabeçalho com data e total de registros, e formata as tabelas com bordas sólidas para impressão. O diálogo de impressão do navegador permite salvar diretamente como PDF.
 
 ## Endpoints da API
 

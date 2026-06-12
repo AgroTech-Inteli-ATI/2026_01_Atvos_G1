@@ -559,6 +559,8 @@ tbody tr:hover { background: var(--bg); }
 .empty-state h3  { margin: 12px 0 4px; font-size: 16px; color: var(--text-900); }
 .empty-state p   { margin: 0; font-size: 13px; color: var(--text-500); }
 
+.loading-state[hidden] { display: none; }
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -773,4 +775,128 @@ tbody tr:hover { background: var(--bg); }
 @media (max-width: 480px) {
   .kpi-grid             { grid-template-columns: 1fr; }
   .navbar-right .user-info { display: none; }
+}
+
+/* ── KPI NOTE ────────────────────────────────────────────────────────────── */
+.kpi-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-300);
+}
+
+/* ── META HINT (inline em table-meta) ───────────────────────────────────── */
+.meta-hint {
+  color: var(--text-300);
+  font-size: 11px;
+}
+
+/* ── FÓRMULA DO RELATÓRIO ────────────────────────────────────────────────── */
+.r-formula {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+}
+
+.rf-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  min-width: 90px;
+  text-align: center;
+}
+
+.rf-talhoes   { background: var(--green-bg); }
+.rf-safras    { background: var(--blue-bg);  }
+.rf-avaliacoes{ background: var(--amber-bg); }
+.rf-processos { background: var(--blue-bg);  }
+.rf-total     { background: var(--green-bg); }
+
+.rf-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-900);
+  line-height: 1.2;
+}
+
+.rf-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-700);
+  margin-top: 2px;
+}
+
+.rf-hint {
+  font-size: 0.65rem;
+  color: var(--text-500);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.rf-op {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-300);
+  padding: 0 2px;
+  align-self: center;
+}
+
+/* ── RELATÓRIO TOOLBAR ───────────────────────────────────────────────────── */
+.relatorio-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.print-only { display: none; }
+.print-header { padding: 0 0 16px; border-bottom: 2px solid #111; margin-bottom: 24px; }
+.print-header h1 { margin: 0 0 4px; font-size: 18px; }
+.print-header p  { margin: 0; font-size: 12px; color: #555; }
+
+/* ── IMPRESSÃO / PDF ─────────────────────────────────────────────────────── */
+@media print {
+  .print-hide { display: none !important; }
+  .print-only { display: block !important; }
+
+  /* Remove tudo exceto o conteúdo do relatório */
+  .navbar, .sidebar, #toast, #modal { display: none !important; }
+  .layout { display: block !important; }
+  .main-content { padding: 0 !important; }
+
+  /* Mostra apenas a view de relatórios */
+  .view[hidden] { display: none !important; }
+  #view-relatorios { display: block !important; }
+  #relatorio-loading { display: none !important; }
+  #relatorio-content { display: block !important; }
+
+  /* Quebra de página entre seções */
+  .report-card { page-break-inside: avoid; break-inside: avoid; margin-bottom: 32px; }
+  .report-card + .report-card { page-break-before: auto; }
+
+  /* Tabelas de relatório */
+  .report-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .report-table th, .report-table td {
+    border: 1px solid #ccc;
+    padding: 4px 8px;
+  }
+  .report-table th { background: #f0f0f0; }
+
+  /* Mini-bar — simplifica para impressão */
+  .mini-bar-wrap { background: #ddd; }
+  .mini-bar      { background: #333; }
+
+  /* Remove sombras e bordas desnecessárias */
+  .table-card { box-shadow: none; border: 1px solid #ddd; }
+
+  body { background: white; }
 }

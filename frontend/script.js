@@ -191,7 +191,8 @@ let currentView = "";
 
 function navigate(view) {
   if (!["dashboard","talhoes","relatorios"].includes(view)) view = "dashboard";
-  if (view === currentView) return;
+  console.log("[Navigate]", view, "| prev:", currentView, "| relatorioLoaded:", relatorioLoaded, "| isDemo:", isDemo);
+  if (view === currentView) { console.log("[Navigate] já nessa view, ignorando"); return; }
   currentView = view;
 
   // Nav links
@@ -217,8 +218,11 @@ function navigate(view) {
 
 // ── API fetch helpers ────────────────────────────────────────────────────────
 async function apiFetch(path) {
-  const res = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(res.statusText);
+  const url = `${API}${path}`;
+  console.log("[API] GET", url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  console.log("[API]", res.status, url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
 
@@ -494,30 +498,95 @@ function clearTalhoes() {
 // ── RELATÓRIOS ───────────────────────────────────────────────────────────────
 
 async function loadRelatorio() {
+  console.log("[Relatorio] iniciando | isDemo:", isDemo);
   relatorioLoaded = true;
-  let data;
+  e("relatorio-loading").hidden = false;
+  e("relatorio-content").hidden = true;
+  e("relatorio-loading").innerHTML =
+    `<div class="spinner" aria-label="Carregando..."></div><p>Carregando relatório...</p>`;
 
-  if (isDemo) {
-    data = DEMO_RELATORIO;
-  } else {
-    try {
-      data = await apiFetch("/relatorio");
-    } catch {
-      isDemo = true; toast("API offline — modo demonstração");
+  let data;
+  try {
+    if (isDemo) {
+      console.log("[Relatorio] modo demo");
       data = DEMO_RELATORIO;
+    } else {
+      console.log("[Relatorio] buscando /api/relatorio …");
+      data = await apiFetch("/relatorio");
+      console.log("[Relatorio] recebido | processos:", data?.por_processo?.length,
+                  "unidades:", data?.por_unidade?.length,
+                  "regras:", data?.top_regras?.length);
     }
+  } catch (err) {
+    console.error("[Relatorio] erro na API:", err);
+    isDemo = true;
+    toast("API offline — modo demonstração");
+    data = DEMO_RELATORIO;
   }
 
   try {
     renderRelatorio(data);
-  } finally {
+    console.log("[Relatorio] renderizado com sucesso");
     e("relatorio-loading").hidden = true;
     e("relatorio-content").hidden = false;
+  } catch (err) {
+    console.error("[Relatorio] erro ao renderizar:", err);
+    e("relatorio-loading").innerHTML =
+      `<p style="color:var(--red);margin:0 0 12px">Erro: ${err.message}</p>
+       <button class="btn-primary" onclick="relatorioLoaded=false;loadRelatorio()">Tentar novamente</button>`;
   }
+}
+
+function exportRelatorio() {
+  const date = new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
+  const meta = `Gerado em ${date} · ${(471982).toLocaleString("pt-BR")} registros · Safra 2026/27`;
+  const pm = e("r-print-meta");
+  if (pm) pm.textContent = meta;
+  window.print();
 }
 
 function renderRelatorio(data) {
   const totalAll = data.por_processo.reduce((s, p) => s + p.total, 0) || 1;
+  const nProc    = data.por_processo.length;
+  const avaliacoes = Math.round(totalAll / nProc);   // linhas Silver = talhão × safra
+  const talhoesUnicos = data.por_unidade.reduce((s, u) => s + u.total_talhoes, 0);
+  const now = new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
+  const dg = e("r-data-geracao"); if (dg) dg.textContent = now;
+  const pm = e("r-print-meta");   if (pm) pm.textContent = `Gerado em ${now} · ${totalAll.toLocaleString("pt-BR")} orientações`;
+
+  // Fórmula explicativa dos números
+  const fEl = e("r-formula");
+  if (fEl) fEl.innerHTML = `
+    <div class="rf-item rf-talhoes">
+      <span class="rf-num">${talhoesUnicos.toLocaleString("pt-BR")}</span>
+      <span class="rf-label">talhões únicos</span>
+      <span class="rf-hint">IDs distintos no inventário</span>
+    </div>
+    <div class="rf-op">×</div>
+    <div class="rf-item rf-safras">
+      <span class="rf-num">~${(avaliacoes / talhoesUnicos).toFixed(1).replace(".",",")}</span>
+      <span class="rf-label">safras por talhão</span>
+      <span class="rf-hint">média — safras 21/22 e 22/23</span>
+    </div>
+    <div class="rf-op">=</div>
+    <div class="rf-item rf-avaliacoes">
+      <span class="rf-num">${avaliacoes.toLocaleString("pt-BR")}</span>
+      <span class="rf-label">avaliações</span>
+      <span class="rf-hint">linhas no relatório por processo</span>
+    </div>
+    <div class="rf-op">×</div>
+    <div class="rf-item rf-processos">
+      <span class="rf-num">${nProc}</span>
+      <span class="rf-label">processos</span>
+      <span class="rf-hint">calagem, gessagem, fosfatagem…</span>
+    </div>
+    <div class="rf-op">=</div>
+    <div class="rf-item rf-total">
+      <span class="rf-num">${totalAll.toLocaleString("pt-BR")}</span>
+      <span class="rf-label">orientações Gold</span>
+      <span class="rf-hint">total na camada Gold</span>
+    </div>
+  `;
 
   // Por processo
   e("r-proc-tbody").innerHTML = data.por_processo.map(p => `
@@ -573,6 +642,16 @@ async function init() {
   e("kpi-attention").textContent = meta.attention.toLocaleString("pt-BR");
   e("kpi-processos").textContent = meta.processos.length;
 
+  // Nota: avaliações = registros Gold / processos = combinações talhão × safra
+  const totalAvaliacoes = Math.round(meta.total_registros / meta.processos.length);
+  const noteEl = e("kpi-note-avaliacoes");
+  if (noteEl) noteEl.textContent = totalAvaliacoes.toLocaleString("pt-BR") + " combinações talhão × safra";
+
+  // Rodapé da tela de Talhões
+  const tf = e("t-footer-meta");
+  if (tf) tf.textContent =
+    `Silver · ${meta.total_talhoes.toLocaleString("pt-BR")} talhões únicos (IDs distintos) em ${totalAvaliacoes.toLocaleString("pt-BR")} combinações talhão × safra`;
+
   const safra = "2026/27";
   e("navbar-safra").textContent = `Safra ${safra}`;
   e("d-footer").textContent     = `Camada Gold · Safra ${safra}`;
@@ -584,9 +663,11 @@ async function init() {
   });
   meta.processos.forEach(p => e("d-processo").add(new Option(PROC[p]||p, p)));
 
-  // Navegação hash
-  const hash = location.hash.replace("#","") || "dashboard";
-  navigate(hash);
+  // Navegação hash — só aplica se o usuário ainda não navegou manualmente
+  if (!currentView) {
+    const hash = location.hash.replace("#","") || "dashboard";
+    navigate(hash);
+  }
   await refreshDash();
 }
 
