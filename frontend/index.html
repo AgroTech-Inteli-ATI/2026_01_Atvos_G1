@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atvos | Monitor Agronomico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── NAVBAR ──────────────────────────────────────────────────────── -->
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="brand-logo" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="brand-name">Atvos</span>
+        <span class="brand-divider"></span>
+        <span class="brand-sub">Monitor Agronomico</span>
+      </div>
+
+      <nav class="navbar-links" aria-label="Navegação principal">
+        <a href="#dashboard" class="nav-link" data-view="dashboard">Dashboard</a>
+        <a href="#talhoes"   class="nav-link" data-view="talhoes">Talhões</a>
+        <a href="#relatorios" class="nav-link" data-view="relatorios">Relatórios</a>
+      </nav>
+
+      <div class="navbar-right">
+        <span class="navbar-safra" id="navbar-safra">Safra —</span>
+        <div class="navbar-divider"></div>
+        <button class="icon-btn" aria-label="Notificações" title="Notificações">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </button>
+        <div class="navbar-divider"></div>
+        <div class="user-section">
+          <div class="avatar" aria-hidden="true">AT</div>
+          <div class="user-info">
+            <span class="user-name">Atvos G1</span>
+            <span class="user-role">Agrônomo</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── LAYOUT ──────────────────────────────────────────────────────── -->
+    <div class="layout" id="layout">
+
+      <!-- ── SIDEBAR ───────────────────────────────────────────────────── -->
+      <aside class="sidebar" id="sidebar" aria-label="Filtros">
+
+        <!-- Painel: Dashboard -->
+        <div class="sidebar-panel" id="sidebar-dashboard">
+          <div class="sidebar-header">
+            <h2>Filtros</h2>
+            <button class="link-btn" id="d-clear-top" type="button">Limpar</button>
+          </div>
+          <hr class="sidebar-divider" />
+          <div class="filter-group">
+            <label class="filter-label" for="d-search">Buscar</label>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <input id="d-search" type="search" placeholder="Buscar talhão..." autocomplete="off" />
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="d-unit">Unidade Industrial</label>
+            <div class="select-wrap">
+              <select id="d-unit"><option value="all">Todas as unidades</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="d-processo">Processo Agronomico</label>
+            <div class="select-wrap">
+              <select id="d-processo"><option value="all">Todos os processos</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="d-status">Status de Alerta</label>
+            <div class="select-wrap">
+              <select id="d-status">
+                <option value="all">Todos os status</option>
+                <option value="urgent">Urgente</option>
+                <option value="attention">Atenção</option>
+                <option value="monitor">Monitorar</option>
+                <option value="ok">OK</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" id="d-apply" type="button">Aplicar filtros</button>
+          <button class="btn-ghost"   id="d-clear" type="button">Limpar filtros</button>
+        </div>
+
+        <!-- Painel: Talhões -->
+        <div class="sidebar-panel" id="sidebar-talhoes" hidden>
+          <div class="sidebar-header">
+            <h2>Filtros</h2>
+            <button class="link-btn" id="t-clear-top" type="button">Limpar</button>
+          </div>
+          <hr class="sidebar-divider" />
+          <div class="filter-group">
+            <label class="filter-label" for="t-search">Buscar ID ou Chave</label>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <input id="t-search" type="search" placeholder="Ex: 410149..." autocomplete="off" />
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="t-unit">Unidade Industrial</label>
+            <div class="select-wrap">
+              <select id="t-unit"><option value="all">Todas as unidades</option></select>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label" for="t-status">Status Geral</label>
+            <div class="select-wrap">
+              <select id="t-status">
+                <option value="all">Todos os status</option>
+                <option value="urgent">Urgente</option>
+                <option value="attention">Atenção</option>
+                <option value="monitor">Monitorar</option>
+                <option value="ok">OK</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" id="t-apply" type="button">Aplicar filtros</button>
+          <button class="btn-ghost"   id="t-clear" type="button">Limpar filtros</button>
+        </div>
+
+      </aside>
+
+      <!-- ── CONTEÚDO PRINCIPAL ────────────────────────────────────────── -->
+      <main class="main-content">
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: DASHBOARD                                               -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-dashboard">
+
+          <section class="kpi-grid" aria-label="Indicadores principais">
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Total de Talhões</span>
+                <div class="kpi-icon icon-green" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M5 20V9m7 11V4m7 16v-7M3 20h18"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="kpi-value" id="kpi-talhoes">—</div>
+              <div class="kpi-sub">
+                <span class="trend-pill pill-green">IDs únicos · todas as safras</span>
+              </div>
+              <p class="kpi-note" id="kpi-note-avaliacoes">— combinações talhão × safra</p>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Intervenções Urgentes</span>
+                <div class="kpi-icon icon-red" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M12 9v4m0 4h.01M10.3 3.8 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="kpi-value color-red" id="kpi-urgent">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-red">avaliações com risco imediato</span></div>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Atenção Necessária</span>
+                <div class="kpi-icon icon-amber" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="kpi-value color-amber" id="kpi-attention">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-amber">avaliações sem dado de solo</span></div>
+            </article>
+
+            <article class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-title">Processos Cobertos</span>
+                <div class="kpi-icon icon-blue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round">
+                    <path d="m5 12 4 4L19 6"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="kpi-value color-blue" id="kpi-processos">—</div>
+              <div class="kpi-sub"><span class="trend-pill pill-blue">Motor de regras ativo</span></div>
+            </article>
+          </section>
+
+          <section class="table-card" aria-label="Orientações por talhão">
+            <div class="table-toolbar">
+              <div>
+                <span class="eyebrow">Monitoramento</span>
+                <h1 class="table-heading">Orientações por Talhão</h1>
+                <p class="table-meta">Exibindo <strong id="d-showing">0</strong> de <strong id="d-total">0</strong> registros &nbsp;·&nbsp; <span class="meta-hint">1 linha = 1 processo em 1 talhão em 1 safra</span></p>
+              </div>
+              <button class="btn-export" id="d-export" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/>
+                </svg>
+                Exportar CSV
+              </button>
+            </div>
+            <div class="active-chips" id="d-chips" aria-live="polite"></div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID Talhão</th>
+                    <th>Unidade</th>
+                    <th>Processo</th>
+                    <th>Orientação</th>
+                    <th>Insumo</th>
+                    <th>Dose kg/ha</th>
+                    <th>Regra Acionada</th>
+                    <th>Data</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="d-tbody"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="d-empty" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <h3>Nenhum resultado encontrado</h3>
+              <p>Ajuste os filtros ou tente outro termo.</p>
+            </div>
+            <div class="table-footer">
+              <span class="footer-meta" id="d-footer">Camada Gold · Safra —</span>
+              <nav class="pagination" id="d-pagination" aria-label="Paginação"></nav>
+            </div>
+          </section>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: TALHÕES                                                 -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-talhoes" hidden>
+          <section class="table-card" aria-label="Inventário de talhões">
+            <div class="table-toolbar">
+              <div>
+                <span class="eyebrow">Inventário</span>
+                <h1 class="table-heading">Todos os Talhões</h1>
+                <p class="table-meta">Exibindo <strong id="t-showing">0</strong> de <strong id="t-total">0</strong> talhões</p>
+              </div>
+            </div>
+            <div class="active-chips" id="t-chips" aria-live="polite"></div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID Talhão</th>
+                    <th>Chave</th>
+                    <th>Unidade</th>
+                    <th>Safra</th>
+                    <th>Status Geral</th>
+                    <th>Processos Alertados</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="t-tbody"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="t-empty" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+              </svg>
+              <h3>Nenhum talhão encontrado</h3>
+              <p>Ajuste os filtros ou tente outro ID.</p>
+            </div>
+            <div class="table-footer">
+              <span class="footer-meta" id="t-footer-meta">Silver · talhões únicos no inventário</span>
+              <nav class="pagination" id="t-pagination" aria-label="Paginação"></nav>
+            </div>
+          </section>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW: RELATÓRIOS                                              -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="view" id="view-relatorios" hidden>
+
+          <div id="relatorio-loading" class="loading-state">
+            <div class="spinner" aria-label="Carregando..."></div>
+            <p>Carregando relatório...</p>
+          </div>
+
+          <div id="relatorio-content" hidden>
+
+            <div class="relatorio-toolbar print-hide">
+              <div>
+                <span class="eyebrow">Análise consolidada</span>
+                <h1 class="table-heading">Relatório de Monitoramento Agronômico</h1>
+                <p class="table-meta" id="r-meta">Atvos · Camada Gold · <span id="r-data-geracao">—</span></p>
+              </div>
+              <button class="btn-export" id="r-pdf" type="button" onclick="exportRelatorio()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14,2 14,8 20,8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10,9 9,9 8,9"/>
+                </svg>
+                Exportar PDF
+              </button>
+            </div>
+
+            <!-- cabeçalho visível apenas na impressão -->
+            <div class="print-header print-only">
+              <h1>Relatório de Monitoramento Agronômico — Atvos</h1>
+              <p id="r-print-meta">Camada Gold</p>
+            </div>
+
+            <!-- fórmula explicativa dos números -->
+            <div class="r-formula print-hide" id="r-formula">
+              <!-- populado por renderRelatorio() -->
+            </div>
+
+            <section class="table-card report-card" aria-label="Por processo">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Análise</span>
+                  <h1 class="table-heading">Distribuição por Processo</h1>
+                  <p class="table-meta">Avaliações por processo e status &nbsp;·&nbsp; <span class="meta-hint">1 avaliação = 1 talhão em 1 safra</span></p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Processo</th>
+                      <th class="num-col" title="Total de avaliações (talhão × safra) para este processo">Avaliações</th>
+                      <th class="num-col" title="Avaliações com status urgente (ex.: erradicação recomendada)">Urgente</th>
+                      <th class="num-col" title="Avaliações com atenção necessária (ex.: dado de solo ausente)">Atenção</th>
+                      <th class="num-col" title="Avaliações em monitoramento contínuo">Monitorar</th>
+                      <th class="num-col" title="Avaliações sem necessidade de intervenção">OK</th>
+                      <th class="num-col" title="Avaliações onde faltam dados de solo para gerar a orientação">Sem Dado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-proc-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="table-card report-card" aria-label="Por unidade">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Análise</span>
+                  <h1 class="table-heading">Distribuição por Unidade Industrial</h1>
+                  <p class="table-meta">Talhões únicos e status por unidade &nbsp;·&nbsp; <span class="meta-hint">Talhões = IDs distintos na unidade</span></p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Unidade</th>
+                      <th class="num-col" title="Talhões únicos (IDs distintos) nesta unidade industrial">Talhões únicos</th>
+                      <th class="num-col" title="Avaliações com status urgente (soma de todos os processos)">Urgente</th>
+                      <th class="num-col" title="Avaliações com atenção necessária (soma de todos os processos)">Atenção</th>
+                      <th class="num-col" title="Avaliações em monitoramento (soma de todos os processos)">Monitorar</th>
+                      <th class="num-col" title="Avaliações sem necessidade de intervenção (soma de todos os processos)">OK</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-unit-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="table-card report-card" aria-label="Regras mais acionadas">
+              <div class="table-toolbar">
+                <div>
+                  <span class="eyebrow">Diagnóstico</span>
+                  <h1 class="table-heading">Regras Mais Acionadas</h1>
+                  <p class="table-meta">Top 15 regras por frequência na camada Gold</p>
+                </div>
+              </div>
+              <div class="table-scroll">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th class="num-col" style="width:40px">#</th>
+                      <th>Regra</th>
+                      <th class="num-col">Total</th>
+                      <th class="num-col">% do total</th>
+                      <th style="min-width:180px">Proporção</th>
+                    </tr>
+                  </thead>
+                  <tbody id="r-regras-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ── MODAL DE DETALHES ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal" role="dialog" aria-modal="true"
+       aria-labelledby="modal-title" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title">Detalhes</h2>
+        <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

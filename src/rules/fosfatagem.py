@@ -1,108 +1,150 @@
 """
-Módulo de regras agronômicas: Fosfatagem
-==========================================
-Fonte: Manual Prático Para o Manejo da Cana-de-Açúcar (Agroadvance, 2022), p. 10.
+src/rules/fosfatagem.py
+Regra de fosfatagem (adubação fosfatada corretiva) para cana-de-açúcar.
 
-Regra central (dose de manutenção):
-  Repor a exportação de fósforo pela colheita estimada.
-  Exportação: 19 kg P / 100 t de colmo colhido (Orlando F., 1983 apud Agroadvance).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PSEUDOCÓDIGO (validar com PO Atvos antes de alterar limiares)
 
-  - Cana Planta: 100% no sulco de plantio
-  - Demais: cobertura 30-60 dias após a colheita
+  ENTRADAS NECESSÁRIAS (análise de solo — ainda não na Silver):
+    p_disponivel : P disponível pelo método Mehlich-1 (mg/dm³)
+    categoria    : CATEGORIA Silver — define se aplica somente em cana-planta
+    area_prod    : Área do talhão (ha) — usada para calcular quantidade total
 
-  OBS: Esta implementação cobre apenas a dose de MANUTENÇÃO.
-  A dose de CORREÇÃO (quando P no solo está abaixo do limiar crítico)
-  depende de validação do PO ATVOS para definição dos limiares por textura
-  e será implementada após aprovação.
+  SE p_disponivel é nulo → SEM_DADO
 
-Parâmetros pendentes de validação pelo PO ATVOS:
-  - Limiares críticos de P no solo por textura (Boletim 100/IAC ou protocolo ATVOS)
-  - Fator de conversão P → P₂O₅ (padrão: × 2.29) confirmado?
+  TABELA DE INTERPRETAÇÃO (Embrapa / IAC — confirmar valores com PO):
+    p_disponivel <  8 mg/dm³ → "Muito Baixo"  → dose_alta  = 120 kg P₂O₅/ha
+    p_disponivel <  15       → "Baixo"        → dose_media =  80 kg P₂O₅/ha
+    p_disponivel <  30       → "Médio"        → dose_baixa =  40 kg P₂O₅/ha
+    p_disponivel >= 30       → "Alto"         → sem_necessidade = 0
+
+  RESTRIÇÃO DE CICLO:
+    Fosfatagem corretiva aplica-se preferencialmente em cana-planta.
+    Em cana-soca: dose reduzida a 50% ou manutenção apenas.
+    (confirmar com PO Atvos se há exceções)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from __future__ import annotations
+from ._base import sem_dado, resultado, numerico, texto, ciclo_do_talhao
 
-# ── Constantes ──────────────────────────────────────────────────────────────
-EXPORTACAO_P_POR_100T = 19.0    # kg P / 100 t colhida  (Orlando F., 1983)
-FATOR_P_PARA_P2O5 = 2.29        # conversão P elementar → P₂O₅
-CATEGORIAS_CANA_PLANTA = {"Cana Planta"}
-CATEGORIAS_INAPTAS = {"Em Reforma", "Pousio", "A Definir", "Passagem", "Formação"}
+# ── PARÂMETROS (Embrapa/IAC — confirmar com PO Atvos) ────────────────────────
+
+# Limiares de P disponível Mehlich-1 em mg/dm³
+P_MUITO_BAIXO = 8.0
+P_BAIXO       = 15.0
+P_MEDIO       = 30.0
+
+# Doses base de P₂O₅ em kg/ha (cana-planta)
+DOSE_MUITO_BAIXO_KG = 120.0
+DOSE_BAIXO_KG       = 80.0
+DOSE_MEDIO_KG       = 40.0
+
+# Fator de redução para cana-soca (adubação de manutenção)
+FATOR_CANA_SOCA = 0.5
 
 
-def calcular_fosfatagem(row: dict) -> dict:
+# ── INTERPRETAÇÃO ─────────────────────────────────────────────────────────────
+
+def _interpretar_p(p: float) -> tuple:
     """
-    Calcula a dose de fósforo para um talhão (dose de manutenção).
+    Retorna (classe, dose_base_kg_ha) conforme teor de P disponível.
 
-    Parâmetros
+    Returns
+    -------
+    Tuple (str, float): classe textual e dose base em kg P₂O₅/ha
+    """
+    if p < P_MUITO_BAIXO:
+        return "muito_baixo", DOSE_MUITO_BAIXO_KG
+    if p < P_BAIXO:
+        return "baixo", DOSE_BAIXO_KG
+    if p < P_MEDIO:
+        return "medio", DOSE_MEDIO_KG
+    return "alto", 0.0
+
+
+# ── REGRA PRINCIPAL ───────────────────────────────────────────────────────────
+
+def calcular_necessidade_fosfatagem(talhao: dict) -> dict:
+    """
+    Avalia a necessidade de adubação fosfatada corretiva para um talhão.
+
+    Parameters
     ----------
-    row : dict
-        Linha do DataFrame enriquecido (Silver + Solo). Campos utilizados:
-        - TCH_PROD   : float — produtividade estimada (t/ha)
-        - CATEGORIA  : str   — tipo de ciclo da cana
-        - p1         : float — fósforo disponível 0-25 cm (mg/dm³) [referência futura]
+    talhao : dict
+        Campos de análise de solo (não disponíveis na Silver ainda):
+          p_disponivel (float) P Mehlich-1, mg/dm³, ex: 10.5
+        Campos disponíveis na Silver:
+          categoria  (str)   "Formação" | "Cana Soca" | etc.
+          area_prod  (float) área de produção, ha
 
-    Retorno
+    Returns
     -------
-    dict com chaves:
-        processo, orientacao, valor_calculado, unidade_medida,
-        regra_acionada, flag_aguardando_validacao_po
+    dict com:
+      orientacao       : recomendação textual com dose em kg/ha
+      valor_calculado  : dose de P₂O₅ em kg/ha
+      regra_acionada   : código da condição disparada
 
-    Exemplo
-    -------
-    >>> calcular_fosfatagem({"TCH_PROD": 80.0, "CATEGORIA": "Cana Planta", "p1": 12.0})
-    {
-        "processo": "fosfatagem",
-        "orientacao": "Aplicar 34.76 kg P₂O₅/ha no sulco de plantio...",
-        "valor_calculado": 34.76,
-        "unidade_medida": "kg P₂O₅/ha",
-        "regra_acionada": "fosfatagem_manutencao_cana_planta",
-        "flag_aguardando_validacao_po": True
-    }
+    Examples
+    --------
+    >>> calcular_necessidade_fosfatagem({
+    ...     'p_disponivel': 6.0, 'categoria': 'Formação', 'area_prod': 50.0
+    ... })
+    {'orientacao': 'Fosfatagem corretiva (P muito baixo): 120 kg P₂O₅/ha ...',
+     'valor_calculado': 120.0,
+     'regra_acionada': 'p_muito_baixo_cana_planta'}
     """
-    base = {"processo": "fosfatagem"}
+    p_disp = talhao.get("p_disponivel")
+    cat    = talhao.get("categoria")
 
-    categoria = str(row.get("CATEGORIA", "")).strip()
+    if not numerico(p_disp):
+        return sem_dado("p_disponivel")
 
-    if categoria in CATEGORIAS_INAPTAS:
-        return {**base,
-                "orientacao": f"Talhão com categoria '{categoria}': fosfatagem não aplicável.",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "fosfatagem_nao_aplicavel",
-                "flag_aguardando_validacao_po": False}
+    p     = float(p_disp)
+    ciclo = ciclo_do_talhao(cat)  # "cana_planta" | "cana_soca" | None
 
-    # Validação de TCH
-    tch = row.get("TCH_PROD")
-    if tch is None or (isinstance(tch, float) and tch != tch) or float(tch) <= 0:
-        return {**base,
-                "orientacao": "SEM_DADO: TCH_PROD ausente ou inválido.",
-                "valor_calculado": None,
-                "unidade_medida": None,
-                "regra_acionada": "dado_ausente_tch_prod",
-                "flag_aguardando_validacao_po": False}
+    classe, dose_base = _interpretar_p(p)
 
-    # Calcular dose de manutenção
-    dose_p = EXPORTACAO_P_POR_100T * (float(tch) / 100.0)       # kg P/ha
-    dose_p2o5 = dose_p * FATOR_P_PARA_P2O5                       # kg P₂O₅/ha
+    if dose_base == 0.0:
+        return resultado(
+            f"Fosfatagem não necessária (P {p:.1f} mg/dm³ — nível alto)",
+            0.0,
+            f"p_{classe}_sem_necessidade",
+        )
 
-    # Momento de aplicação
-    if categoria in CATEGORIAS_CANA_PLANTA:
-        momento = "100% no sulco de plantio"
-        regra = "fosfatagem_manutencao_cana_planta"
-    else:
-        momento = "cobertura 30-60 dias após a colheita"
-        regra = "fosfatagem_manutencao_soca"
+    if ciclo == "cana_soca":
+        dose = round(dose_base * FATOR_CANA_SOCA, 1)
+        return resultado(
+            f"Fosfatagem de manutenção (cana-soca): {dose:.0f} kg P₂O₅/ha "
+            f"(P {p:.1f} mg/dm³ — nível {classe.replace('_', ' ')})",
+            dose,
+            f"p_{classe}_cana_soca",
+        )
 
-    orientacao = (
-        f"Aplicar {dose_p2o5:.2f} kg P₂O₅/ha ({momento}). "
-        f"Base: exportação de {EXPORTACAO_P_POR_100T} kg P / 100 t × TCH={tch:.0f} t/ha. "
-        f"[NOTA: dose de manutenção apenas. "
-        f"Dose de correção por deficiência de P no solo aguarda validação PO.]"
+    if ciclo == "cana_planta":
+        return resultado(
+            f"Fosfatagem corretiva (cana-planta): {dose_base:.0f} kg P₂O₅/ha "
+            f"(P {p:.1f} mg/dm³ — nível {classe.replace('_', ' ')})",
+            dose_base,
+            f"p_{classe}_cana_planta",
+        )
+
+    # Ciclo indefinido — ainda recomenda com ressalva
+    return resultado(
+        f"Fosfatagem indicada: {dose_base:.0f} kg P₂O₅/ha "
+        f"(P {p:.1f} mg/dm³ — nível {classe.replace('_', ' ')}) — confirmar ciclo",
+        dose_base,
+        f"p_{classe}_ciclo_indefinido",
     )
 
-    return {**base,
-            "orientacao": orientacao,
-            "valor_calculado": round(dose_p2o5, 2),
-            "unidade_medida": "kg P₂O₅/ha",
-            "regra_acionada": regra,
-            "flag_aguardando_validacao_po": True}
+
+if __name__ == "__main__":
+    casos = [
+        {"p_disponivel": 6.0,  "categoria": "Formação",  "area_prod": 50.0},
+        {"p_disponivel": 12.0, "categoria": "Cana Soca", "area_prod": 30.0},
+        {"p_disponivel": 20.0, "categoria": "Formação",  "area_prod": 25.0},
+        {"p_disponivel": 35.0, "categoria": "Cana Soca", "area_prod": 40.0},
+        {"p_disponivel": None, "categoria": "Formação",  "area_prod": 20.0},
+    ]
+    for c in casos:
+        r = calcular_necessidade_fosfatagem(c)
+        print(f"P={c.get('p_disponivel'):<6} | {r['regra_acionada']:<35} | {r['orientacao']}")
