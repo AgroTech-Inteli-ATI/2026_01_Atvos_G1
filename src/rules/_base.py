@@ -46,6 +46,15 @@ def nao_se_aplica(motivo: str) -> dict:
     }
 
 
+def dado_suspeito(campo: str, valor, motivo: str) -> dict:
+    """Valor presente mas fisicamente impossível ou fora do intervalo esperado."""
+    return {
+        "orientacao": f"DADO_SUSPEITO: {motivo}",
+        "valor_calculado": None,
+        "regra_acionada": f"outlier_{campo}",
+    }
+
+
 def resultado(orientacao: str, valor: Optional[float], regra: str) -> dict:
     """Constrói resultado válido; arredonda valor_calculado a 2 casas."""
     return {
@@ -78,18 +87,6 @@ def texto(valor: Any) -> bool:
 # Valores de CATEGORIA na camada Silver
 CATEGORIAS_CANA_PLANTA = {"Formação", "Cana Planta", "Muda"}
 CATEGORIAS_CANA_SOCA   = {"Cana Soca"}
-
-# Mapeamento de DESC_AMBIENTE (Silver) para classe de textura
-# Chave: substring que aparece em DESC_AMBIENTE (case-insensitive)
-# Valor: classe simplificada usada nas regras
-_TEXTURA_MAP = {
-    "arenos":  "arenoso",    # "Arenoso", "Franco-Arenoso", "Muito Arenoso"
-    "argiloso": "argiloso",  # "Argiloso", "Franco-Argiloso"
-    "muito argiloso": "muito_argiloso",
-    "médio":   "medio",      # "Médio", "Médio Argiloso"
-    "franco":  "medio",      # "Franco", "Franco-Siltoso"
-    "latossolo": "argiloso", # fallback por DE_TP_SOLO
-}
 
 
 def classificar_textura(desc_ambiente: Any) -> Optional[str]:

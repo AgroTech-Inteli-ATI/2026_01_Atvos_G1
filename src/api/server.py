@@ -43,6 +43,8 @@ _STR_COLS = [
     "regra_acionada", "insumo", "dose_kg_ha", "quantidade_total_kg", "data_geracao",
 ]
 
+_NUM_COLS = ["area_ha"]
+
 
 def _latest_gold() -> str:
     """Prefere Parquet (rapido, 4 MB) em vez de CSV (lento, 67 MB)."""
@@ -59,7 +61,7 @@ def _latest_gold() -> str:
 def _classify(row: dict) -> str:
     regra = row.get("regra_acionada", "")
     ori   = row.get("orientacao", "").upper()
-    if "dado_ausente" in regra or "SEM_DADO" in ori:
+    if "dado_ausente" in regra or "SEM_DADO" in ori or "DADO_SUSPEITO" in ori or regra.startswith("outlier_"):
         return "attention"
     if "ERRADICACAO" in ori and "RECOMENDADA" in ori:
         return "urgent"
@@ -88,7 +90,8 @@ def _load() -> list:
         df["status"] = np.select(
             [
                 regra.str.contains("dado_ausente", regex=False)
-                    | ori_upper.str.contains("SEM_DADO", regex=False),
+                    | ori_upper.str.contains("SEM_DADO", regex=False)
+                    | regra.str.startswith("outlier_", na=False),
                 ori_upper.str.contains("ERRADICACAO", regex=False)
                     & ori_upper.str.contains("RECOMENDADA", regex=False),
                 ori_upper.str.contains("MONITORAR", regex=False)
@@ -97,12 +100,18 @@ def _load() -> list:
             ["attention", "urgent", "monitor"],
             default="ok",
         )
-        rows = df[_STR_COLS + ["status"]].to_dict("records")
+        for col in _NUM_COLS:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            else:
+                df[col] = float("nan")
+        rows = df[_STR_COLS + _NUM_COLS + ["status"]].to_dict("records")
 
     else:
         rows = []
         with open(path, newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
+                regra = row.get("regra_acionada", "")
                 rows.append({
                     "id_talhao":           row.get("id_talhao", ""),
                     "chave":               row.get("chave", ""),
@@ -110,10 +119,11 @@ def _load() -> list:
                     "safra":               row.get("safra", ""),
                     "processo":            row.get("processo", ""),
                     "orientacao":          row.get("orientacao", ""),
-                    "regra_acionada":      row.get("regra_acionada", ""),
+                    "regra_acionada":      regra,
                     "insumo":              row.get("insumo") or "",
                     "dose_kg_ha":          row.get("dose_kg_ha") or "",
                     "quantidade_total_kg": row.get("quantidade_total_kg") or "",
+                    "area_ha":             float(row["area_ha"]) if row.get("area_ha") else None,
                     "data_geracao":        row.get("data_geracao", ""),
                     "status":              _classify(row),
                 })
@@ -126,13 +136,21 @@ def _compute_meta(records: list) -> dict:
     counts    = {"urgent": 0, "attention": 0, "monitor": 0, "ok": 0}
     unidades  = set()
     processos = set()
+    # Area por talhão (deduplicada — cada talhão conta uma vez)
+    talhao_area: dict = {}
     for r in records:
         counts[r["status"]] += 1
         if r["unidade"]:  unidades.add(r["unidade"])
         if r["processo"]: processos.add(r["processo"])
+        tid  = r["id_talhao"]
+        area = r.get("area_ha")
+        if tid and tid not in talhao_area and area and area == area:  # area != NaN
+            talhao_area[tid] = float(area)
+    area_total = round(sum(talhao_area.values()), 2)
     return {
         "total_registros": len(records),
         "total_talhoes":   len({r["id_talhao"] for r in records}),
+        "area_total_ha":   area_total,
         **counts,
         "unidades":     sorted(unidades),
         "processos":    sorted(processos),
@@ -145,11 +163,13 @@ def _compute_talhoes(records: list) -> list:
     for r in records:
         tid = r["id_talhao"]
         if tid not in groups:
+            area = r.get("area_ha")
             groups[tid] = {
                 "id_talhao":     tid,
                 "chave":         r["chave"],
                 "unidade":       r["unidade"],
                 "safra":         r["safra"],
+                "area_ha":       round(float(area), 2) if area and area == area else None,
                 "status_geral":  "ok",
                 "_pri":          0,
                 "alertas":       [],
@@ -172,43 +192,120 @@ def _compute_talhoes(records: list) -> list:
     return result
 
 
+def _area(r) -> float:
+    """Extrai area_ha de um record como float (0.0 se ausente/NaN)."""
+    a = r.get("area_ha")
+    try:
+        v = float(a)
+        return v if v == v else 0.0  # NaN check
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _compute_relatorio(records: list) -> dict:
-    por_proc  = collections.defaultdict(
-        lambda: {"total": 0, "urgent": 0, "attention": 0, "monitor": 0, "ok": 0, "sem_dado": 0}
-    )
-    por_unit  = collections.defaultdict(
-        lambda: {"_set": set(), "urgent": 0, "attention": 0, "monitor": 0, "ok": 0}
-    )
+    _proc_template = lambda: {
+        "total": 0,
+        "urgent": 0, "attention": 0, "monitor": 0, "ok": 0, "sem_dado": 0,
+        "area_total_ha": 0.0,
+        "area_urgent_ha": 0.0, "area_attention_ha": 0.0,
+        "area_monitor_ha": 0.0, "area_ok_ha": 0.0,
+    }
+    por_proc  = collections.defaultdict(_proc_template)
+
+    # Para por_unidade: rastrear (unit, talhao_id) → pior status e area
+    # Cada talhão conta uma vez por unidade (usando pior status entre todos os processos)
+    unit_talhao_status: dict = {}   # (unit, tid) → worst status
+    unit_talhao_area:   dict = {}   # (unit, tid) → area_ha
+
     regras_ct = collections.Counter()
     total     = len(records)
 
     for r in records:
-        por_proc[r["processo"]]["total"] += 1
-        por_proc[r["processo"]][r["status"]] += 1
-        if "dado_ausente" in r["regra_acionada"]:
-            por_proc[r["processo"]]["sem_dado"] += 1
+        proc  = r["processo"]
+        st    = r["status"]
+        area  = _area(r)
+        regra = r["regra_acionada"]
 
-        por_unit[r["unidade"]]["_set"].add(r["id_talhao"])
-        por_unit[r["unidade"]][r["status"]] += 1
+        por_proc[proc]["total"] += 1
+        por_proc[proc][st]      += 1
+        por_proc[proc]["area_total_ha"]      += area
+        por_proc[proc][f"area_{st}_ha"]      += area
+        if "dado_ausente" in regra or regra.startswith("outlier_"):
+            por_proc[proc]["sem_dado"] += 1
 
-        regras_ct[r["regra_acionada"]] += 1
+        key = (r["unidade"], r["id_talhao"])
+        if key not in unit_talhao_area:
+            unit_talhao_area[key]   = area
+            unit_talhao_status[key] = st
+        else:
+            prev = STATUS_PRIORITY.get(unit_talhao_status[key], 0)
+            curr = STATUS_PRIORITY.get(st, 0)
+            if curr > prev:
+                unit_talhao_status[key] = st
+
+        regras_ct[regra] += 1
+
+    # Agregar por_unidade a partir dos talhões deduplicados
+    por_unit: dict = collections.defaultdict(
+        lambda: {
+            "_set": set(),
+            "area_total_ha": 0.0,
+            "area_urgent_ha": 0.0, "area_attention_ha": 0.0,
+            "area_monitor_ha": 0.0, "area_ok_ha": 0.0,
+        }
+    )
+    for (unit, tid), area in unit_talhao_area.items():
+        st = unit_talhao_status[(unit, tid)]
+        por_unit[unit]["_set"].add(tid)
+        por_unit[unit]["area_total_ha"]    += area
+        por_unit[unit][f"area_{st}_ha"]    += area
+
+    def _pct(num, denom):
+        return round(num / denom * 100, 1) if denom else 0.0
+
+    proc_lista = []
+    for p, d in por_proc.items():
+        at = d["area_total_ha"]
+        proc_lista.append({
+            "processo":         p,
+            "label":            LABEL_PROCESSO.get(p, p),
+            "total":            d["total"],
+            "urgent":           d["urgent"],
+            "attention":        d["attention"],
+            "monitor":          d["monitor"],
+            "ok":               d["ok"],
+            "sem_dado":         d["sem_dado"],
+            "area_total_ha":    round(at, 2),
+            "area_urgent_ha":   round(d["area_urgent_ha"], 2),
+            "area_attention_ha": round(d["area_attention_ha"], 2),
+            "area_monitor_ha":  round(d["area_monitor_ha"], 2),
+            "area_ok_ha":       round(d["area_ok_ha"], 2),
+            "pct_area_urgent":   _pct(d["area_urgent_ha"],   at),
+            "pct_area_attention": _pct(d["area_attention_ha"], at),
+            "pct_area_monitor":  _pct(d["area_monitor_ha"],  at),
+            "pct_area_ok":       _pct(d["area_ok_ha"],       at),
+        })
+
+    unit_lista = []
+    for u, d in por_unit.items():
+        at = d["area_total_ha"]
+        unit_lista.append({
+            "unidade":           u,
+            "total_talhoes":     len(d["_set"]),
+            "area_total_ha":     round(at, 2),
+            "area_urgent_ha":    round(d["area_urgent_ha"], 2),
+            "area_attention_ha": round(d["area_attention_ha"], 2),
+            "area_monitor_ha":   round(d["area_monitor_ha"], 2),
+            "area_ok_ha":        round(d["area_ok_ha"], 2),
+            "pct_area_urgent":   _pct(d["area_urgent_ha"],   at),
+            "pct_area_attention": _pct(d["area_attention_ha"], at),
+            "pct_area_monitor":  _pct(d["area_monitor_ha"],  at),
+            "pct_area_ok":       _pct(d["area_ok_ha"],       at),
+        })
 
     return {
-        "por_processo": sorted(
-            [{"processo": p, "label": LABEL_PROCESSO.get(p, p), **d}
-             for p, d in por_proc.items()],
-            key=lambda x: x["processo"],
-        ),
-        "por_unidade": sorted(
-            [{"unidade": u,
-              "total_talhoes": len(d["_set"]),
-              "urgent":    d["urgent"],
-              "attention": d["attention"],
-              "monitor":   d["monitor"],
-              "ok":        d["ok"]}
-             for u, d in por_unit.items()],
-            key=lambda x: x["unidade"],
-        ),
+        "por_processo": sorted(proc_lista, key=lambda x: x["processo"]),
+        "por_unidade":  sorted(unit_lista, key=lambda x: x["unidade"]),
         "top_regras": [
             {"regra": r, "total": ct, "pct": round(ct / total * 100, 1) if total else 0}
             for r, ct in regras_ct.most_common(15)

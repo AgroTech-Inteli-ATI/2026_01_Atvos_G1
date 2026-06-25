@@ -38,7 +38,7 @@ PSEUDOCÓDIGO (validar com PO Atvos antes de alterar limiares)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from ._base import sem_dado, nao_se_aplica, resultado, numerico, texto
+from ._base import sem_dado, nao_se_aplica, resultado, dado_suspeito, numerico, texto
 
 # ── PARÂMETROS (confirmar com PO Atvos) ──────────────────────────────────────
 
@@ -46,6 +46,10 @@ CORTE_TARDIO         = 5     # NO_CORTE >= este valor é considerado canavial ta
 TCH_CRITICO          = 50.0  # t/ha — abaixo disso em canavial tardio → erradicação
 TCH_ALERTA           = 70.0  # t/ha — zona de avaliação para canavial tardio
 TCH_INVESTIGACAO     = 40.0  # t/ha — abaixo disso em canavial jovem → investigar
+
+# Limites físicos de sanidade de dados
+TCH_MAX_VALIDO       = 300.0  # t/ha — acima disso é fisicamente impossível para cana
+NO_CORTE_MAX_VALIDO  = 20     # número de cortes implausível acima disso (~20 anos)
 
 
 # ── REGRA PRINCIPAL ───────────────────────────────────────────────────────────
@@ -98,6 +102,20 @@ def calcular_necessidade_erradicacao(talhao: dict) -> dict:
         return sem_dado("tch_prod")
     if not numerico(no_corte):
         return sem_dado("no_corte")
+
+    # ── detecção de outliers ───────────────────────────────────────────────────
+    _tch = float(tch_prod)
+    _nc  = int(no_corte)
+    if _tch < 0:
+        return dado_suspeito("tch_prod", tch_prod, "TCH não pode ser negativo")
+    if _tch > TCH_MAX_VALIDO:
+        return dado_suspeito("tch_prod", tch_prod,
+                             f"TCH acima do máximo físico ({TCH_MAX_VALIDO} t/ha)")
+    if _nc < 0:
+        return dado_suspeito("no_corte", no_corte, "número de corte não pode ser negativo")
+    if _nc > NO_CORTE_MAX_VALIDO:
+        return dado_suspeito("no_corte", no_corte,
+                             f"número de cortes implausível (> {NO_CORTE_MAX_VALIDO})")
 
     # ── casos que não se aplicam ───────────────────────────────────────────────
     if texto(categoria) and categoria in ("Formação", "Muda"):

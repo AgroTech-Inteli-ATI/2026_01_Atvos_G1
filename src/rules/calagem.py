@@ -43,7 +43,7 @@ FÓRMULA DE DOSE (método da saturação de bases — Embrapa/IAC):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from ._base import sem_dado, nao_se_aplica, resultado, numerico, texto, ciclo_do_talhao
+from ._base import sem_dado, nao_se_aplica, resultado, dado_suspeito, numerico, texto, ciclo_do_talhao
 
 # ── PARÂMETROS (ajustar após validação com PO Atvos) ─────────────────────────
 
@@ -129,6 +129,14 @@ def calcular_necessidade_calagem(talhao: dict) -> dict:
     ph   = float(ph)
     ctc  = float(ctc)
     v_at = float(v_at)
+
+    # ── detecção de outliers ───────────────────────────────────────────────────
+    if ph < 0 or ph > 14:
+        return dado_suspeito("ph_solo", ph, "pH deve estar entre 0 e 14")
+    if ctc < 0:
+        return dado_suspeito("ctc", ctc, "CTC não pode ser negativa")
+    if v_at < 0 or v_at > 100:
+        return dado_suspeito("v_atual", v_at, "saturação de bases deve estar entre 0% e 100%")
 
     ciclo = ciclo_do_talhao(cat)  # "cana_planta" | "cana_soca" | None
 

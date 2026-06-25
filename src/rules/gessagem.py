@@ -40,7 +40,7 @@ DOSE DE GESSO (Embrapa — confirmar com PO Atvos):
 """
 
 from ._base import (
-    sem_dado, nao_se_aplica, resultado,
+    sem_dado, nao_se_aplica, resultado, dado_suspeito,
     numerico, texto, classificar_textura,
 )
 
@@ -120,6 +120,14 @@ def calcular_necessidade_gessagem(talhao: dict) -> dict:
     # ── caminho com análise química completa ──────────────────────────────────
     if numerico(sat_al):
         sat_al = float(sat_al)
+
+        # outlier: saturação de Al³⁺ deve estar entre 0% e 100%
+        if sat_al < 0 or sat_al > 100:
+            return dado_suspeito("saturacao_al", sat_al,
+                                 "saturação de Al³⁺ deve estar entre 0% e 100%")
+
+        if numerico(ctc) and float(ctc) < 0:
+            return dado_suspeito("ctc", ctc, "CTC não pode ser negativa")
 
         if sat_al > SAT_AL_CRITICA:
             if not numerico(ctc):

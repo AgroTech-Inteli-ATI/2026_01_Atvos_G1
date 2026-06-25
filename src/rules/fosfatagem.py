@@ -25,7 +25,7 @@ PSEUDOCÓDIGO (validar com PO Atvos antes de alterar limiares)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-from ._base import sem_dado, resultado, numerico, texto, ciclo_do_talhao
+from ._base import sem_dado, resultado, dado_suspeito, numerico, texto, ciclo_do_talhao
 
 # ── PARÂMETROS (Embrapa/IAC — confirmar com PO Atvos) ────────────────────────
 
@@ -99,7 +99,16 @@ def calcular_necessidade_fosfatagem(talhao: dict) -> dict:
     if not numerico(p_disp):
         return sem_dado("p_disponivel")
 
-    p     = float(p_disp)
+    p = float(p_disp)
+
+    # outlier: P disponível não pode ser negativo; acima de 1000 mg/dm³ é impossível
+    if p < 0:
+        return dado_suspeito("p_disponivel", p_disp,
+                             "P disponível não pode ser negativo")
+    if p > 1000:
+        return dado_suspeito("p_disponivel", p_disp,
+                             "P disponível acima do máximo físico (> 1000 mg/dm³)")
+
     ciclo = ciclo_do_talhao(cat)  # "cana_planta" | "cana_soca" | None
 
     classe, dose_base = _interpretar_p(p)

@@ -2,7 +2,7 @@
 
 import pytest
 from rules.gessagem import calcular_necessidade_gessagem, SAT_AL_CRITICA, DOSE_MAX_T_HA
-from helpers import assert_resultado_valido, assert_sem_dado, assert_nao_se_aplica
+from helpers import assert_resultado_valido, assert_sem_dado, assert_nao_se_aplica, assert_dado_suspeito
 
 
 # ── SEM_DADO — sem dado algum ─────────────────────────────────────────────────
@@ -91,6 +91,36 @@ def test_al_nan_cai_para_textura(talhao_nan):
     r = calcular_necessidade_gessagem({**talhao_nan, "desc_ambiente": "Argiloso"})
     assert_resultado_valido(r)
     assert "textura_argiloso" in r["regra_acionada"]
+
+
+# ── OUTLIERS ─────────────────────────────────────────────────────────────────
+
+def test_saturacao_al_negativa_e_outlier():
+    r = calcular_necessidade_gessagem({"saturacao_al": -1.0, "ctc": 60.0})
+    assert_dado_suspeito(r, "saturacao_al")
+
+
+def test_saturacao_al_acima_de_100_e_outlier():
+    r = calcular_necessidade_gessagem({"saturacao_al": 101.0, "ctc": 60.0})
+    assert_dado_suspeito(r, "saturacao_al")
+
+
+def test_saturacao_al_exatamente_100_nao_e_outlier():
+    """100% de saturação por Al³⁺ é o máximo físico — deve ser tratado como crítico."""
+    r = calcular_necessidade_gessagem({"saturacao_al": 100.0, "ctc": 60.0})
+    assert r["orientacao"] != "DADO_SUSPEITO"
+    assert r["regra_acionada"] == "al_alto_gessagem_indicada"
+
+
+def test_ctc_negativa_com_al_alto_e_outlier():
+    r = calcular_necessidade_gessagem({"saturacao_al": 30.0, "ctc": -5.0})
+    assert_dado_suspeito(r, "ctc")
+
+
+@pytest.mark.parametrize("sat_invalida", [-0.001, -50.0, 100.001, 200.0])
+def test_saturacao_al_fora_do_intervalo_fisico(sat_invalida):
+    r = calcular_necessidade_gessagem({"saturacao_al": sat_invalida, "ctc": 60.0})
+    assert_dado_suspeito(r, "saturacao_al")
 
 
 # ── CONTRATO DE INTERFACE ─────────────────────────────────────────────────────
