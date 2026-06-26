@@ -11,123 +11,151 @@ sidebar_position: 4
 
 ---
 
-## 1. Custo da Solução Atual (Local / On-Premise)
+## 1. Custo de Desenvolvimento
 
-A solução foi desenvolvida para rodar inteiramente no ambiente local da Atvos, sem dependência de serviços cloud pagos.
-
-### Custo de infraestrutura: R$ 0/mês
-
-| Componente | Tecnologia adotada | Alternativa cloud | Custo cloud estimado |
-|---|---|---|---|
-| Armazenamento de dados | Sistema de arquivos local (`data/`) | AWS S3 / GCS | R$ 50–200/mês |
-| Processamento da pipeline | Python local (`src/pipeline/`) | AWS Lambda / Cloud Run | R$ 100–500/mês |
-| Banco de dados | Parquet + DuckDB | BigQuery / Redshift | R$ 200–800/mês |
-| Servidor da API | `http.server` embutido do Python | Cloud Run / App Engine | R$ 150–600/mês |
-| Frontend | HTML/CSS/JS estático | Vercel / Netlify | R$ 0–100/mês |
-| **Total mensal** | **R$ 0** | | **R$ 500–2.200/mês** |
-
-### Custo de desenvolvimento
-
-| Item | Horas estimadas | Observação |
-|---|---|---|
-| Ingestão e limpeza (Sprint 1) | ~40h | Pipeline Raw → Silver |
-| Motor de regras (Sprint 2) | ~60h | 7 módulos + 170 testes |
-| API REST (Sprint 3) | ~30h | Servidor HTTP puro Python |
-| Frontend (Sprint 4) | ~40h | SPA 3 telas sem framework |
-| **Total** | **~170h** | |
+A solução foi entregue como **projeto acadêmico pelo Inteli** — o custo de desenvolvimento para a Atvos foi **R$ 0**. Não houve contratação de equipe externa nem horas faturadas ao parceiro.
 
 ---
 
-## 2. Custo da Arquitetura Alternativa (GCP / AWS)
+## 2. Custo de Manutenção — Desenvolvedor de Mercado
 
-Estimativa para o mesmo volume de dados (471 mil registros Gold, 67 mil talhões):
+Após a entrega, a manutenção e evolução do sistema requer um perfil de **desenvolvedor pleno** com conhecimento em Python, engenharia de dados e domínio agronômico básico.
 
-### Google Cloud Platform
+### Encargos reais de um dev pleno CLT no Brasil (2025)
 
-| Serviço | Uso estimado | Custo mensal (USD) |
-|---|---|---|
-| Cloud Storage | 10 GB (Parquet + Excel) | $0,23 |
-| Cloud Run | 1 instância 1vCPU/2GB, 730h | $21,60 |
-| BigQuery | 10 GB armazenados + 100 GB queries/mês | $7,00 |
-| Cloud Scheduler | 30 execuções/mês (pipeline diário) | $0,10 |
-| **Total** | | **~$29/mês (~R$ 165/mês)** |
-
-### Amazon Web Services
-
-| Serviço | Uso estimado | Custo mensal (USD) |
-|---|---|---|
-| S3 | 10 GB | $0,23 |
-| Lambda | 30 execuções × 5 min × 1 GB | $0,50 |
-| RDS PostgreSQL | db.t3.micro | $15,00 |
-| EC2 t3.small (API) | On-demand 730h | $16,80 |
-| **Total** | | **~$33/mês (~R$ 190/mês)** |
-
----
-
-## 3. Comparação Direta
-
-| Dimensão | Solução Atual | GCP | AWS |
-|---|---|---|---|
-| Custo mensal | **R$ 0** | R$ 165 | R$ 190 |
-| Custo anual | **R$ 0** | R$ 1.980 | R$ 2.280 |
-| Dependência externa | Nenhuma | Alta | Alta |
-| Portabilidade | Total | Média | Média |
-| SLA de disponibilidade | Depende do hardware local | 99,9%+ | 99,9%+ |
-| Escalabilidade automática | Manual (adicionar workers) | Automática | Automática |
-| Setup inicial | Baixo | Médio | Alto |
-| Segurança dos dados | Controle total (on-premise) | Compartilhada | Compartilhada |
-
----
-
-## 4. Valor Gerado vs. Custo
-
-### Impacto financeiro potencial
-
-O motor de regras identifica talhões com necessidade de erradicação (custo de ~R$ 800–1.500/ha) e prioriza por urgência. Para a Atvos com ~200.000 ha cultivados:
-
-| Cenário | Impacto estimado |
+| Item | Cálculo |
 |---|---|
-| Reduzir 1% de erradicações tardias (200 ha) | Economia de R$ 160–300 mil/safra |
-| Otimizar dose de calcário em 5% dos talhões | Economia de R$ 50–100 mil/safra |
-| Antecipar 2% de dessecações (400 ha) | Ganho de qualidade estimado R$ 200 mil/safra |
+| Salário bruto mensal | R$ 8.000 |
+| INSS patronal (20%) | R$ 1.600 |
+| FGTS (8%) | R$ 640 |
+| 13º salário (8,33%/mês) | R$ 666 |
+| Férias + 1/3 (11,1%/mês) | R$ 888 |
+| RAT + Sistema S (~5,8%) | R$ 464 |
+| VR/VA + Plano de saúde | R$ 1.200 |
+| **Custo real/mês para a empresa** | **R$ 13.458** |
+| **Custo/hora (168h úteis/mês)** | **~R$ 80/h** |
 
-### ROI estimado
+### Horas de manutenção estimadas por ano
 
-```
-Custo total de desenvolvimento (170h × R$ 80/h):   R$ 13.600
-Custo operacional anual:                            R$      0
-Economia estimada conservadora (1ª safra):          R$ 200.000+
-
-ROI no 1º ano: (200.000 - 13.600) / 13.600 = 1.370%
-```
-
----
-
-## 5. Decisão de Arquitetura e Justificativa
-
-A solução local foi escolhida pelos seguintes critérios:
-
-1. **Confidencialidade dos dados** — Dados de produção da Atvos (volumes, talhões, produtividade) não saem do ambiente da empresa
-2. **Zero custo recorrente** — Viável para projeto-piloto sem aprovação de budget cloud
-3. **Independência de conectividade** — Opera mesmo sem internet (campo agrícola)
-4. **Velocidade de iteração** — Deploy é apenas copiar arquivos; sem CI/CD cloud necessário
-
-### Quando migrar para cloud?
-
-A migração para cloud passa a ser justificada quando:
-- Mais de 3 usuários simultâneos precisam da API em tempo real
-- O volume de dados cresce acima de 50 GB (Parquet fica lento)
-- A Atvos deseja integrar com ERPs ou sistemas externos via API pública
-- SLA de 99,9%+ é exigido para o sistema
-
----
-
-## 6. Custo de Manutenção e Evolução
-
-| Tarefa | Frequência | Esforço |
+| Tarefa | Frequência | Horas/ano |
 |---|---|---|
-| Atualizar dados Excel raw | Mensal | 5 min (rodar pipeline) |
-| Ajustar limiares agronômicos | A pedido do PO | 1–2h por módulo |
-| Adicionar novo módulo de regra | Por demanda | 4–8h (incluindo testes) |
-| Atualizar frontend | Por demanda | 2–4h |
-| Backup dos dados Gold | Automático via OS | R$ 0 (disco local) |
+| Executar pipeline e validar Gold | Mensal (30 min) | 6h |
+| Atualizar dados Excel raw | Mensal (1h) | 12h |
+| Ajustar limiares agronômicos (a pedido do PO) | Trimestral (3h) | 12h |
+| Adicionar novo módulo de regra (com testes) | Semestral (8h) | 16h |
+| Atualizar frontend e API | Trimestral (4h) | 16h |
+| Monitoramento e correção de bugs | Contínuo | 20h |
+| **Total estimado** | | **~82h/ano** |
+
+**Custo de manutenção anual:** 82h × R$ 80/h = **~R$ 6.560/ano**
+
+> Comparação: contratação de consultoria PJ (R$ 120–180/h) → R$ 9.840–14.760/ano
+
+---
+
+## 3. Custo de Infraestrutura no GCP
+
+A Atvos já utiliza Google Cloud Platform. Os serviços incrementais para hospedar esta solução são:
+
+### Serviços GCP necessários (preços GCP Calculator, jun/2025, câmbio R$ 5,70)
+
+| Serviço | Configuração | Custo/mês (USD) | Custo/mês (BRL) |
+|---|---|---|---|
+| Cloud Storage | 15 GB Standard (Parquet + Excel + Gold) | $0,30 | R$ 1,71 |
+| Cloud Run — API | 1 vCPU / 512 MB, 730h contínuas | $14,40 | R$ 82,08 |
+| Cloud Run — Pipeline | 2 vCPU / 2 GB, 30 execuções × 2 min | $0,18 | R$ 1,03 |
+| Cloud Scheduler | 2 jobs (pipeline diário + limpeza) | $0,00 | R$ 0,00 (free tier) |
+| BigQuery | 10 GB armazenados + 50 GB queries | $0,45 | R$ 2,57 |
+| Artifact Registry | Imagem Docker (~500 MB) | $0,05 | R$ 0,29 |
+| **Total mensal** | | **~$15,38** | **~R$ 87,70** |
+| **Total anual** | | **~$184,56** | **~R$ 1.052** |
+
+> Se a Atvos já tem **Committed Use Discount (CUD)** de 1 ou 3 anos no GCP, o custo de Cloud Run cai 37–55%, reduzindo o total para R$ 55–70/mês.
+
+### Por que usar o GCP da Atvos e não on-premise
+
+| Critério | On-premise | GCP Atvos |
+|---|---|---|
+| Custo incremental | R$ 0 (já tem servidor) | ~R$ 88/mês |
+| Disponibilidade para múltiplos usuários | Depende da rede interna | 99,95% SLA |
+| Backup automático | Manual | Automático (versioning GCS) |
+| Integração com outros sistemas Atvos | Mais complexa | Nativa (IAM, VPC) |
+| Deploy de atualização | Copiar arquivos manualmente | `gcloud run deploy` |
+
+---
+
+## 4. Custo Total da Solução em Produção (Cenário GCP)
+
+| Componente | Custo anual |
+|---|---|
+| Desenvolvimento inicial (Inteli) | **R$ 0** |
+| Infraestrutura GCP | **~R$ 1.052** |
+| Manutenção (dev pleno, 82h/ano) | **~R$ 6.560** |
+| **Total ano 1** | **~R$ 7.612** |
+| **Total ano 2 em diante** | **~R$ 7.612/ano** |
+
+---
+
+## 5. ROI — Comparação com Alternativas Reais
+
+### Alternativa A: Análise manual por agrônomo
+
+Um agrônomo sênior dedicado a analisar 67.426 talhões manualmente por safra:
+
+| Item | Estimativa |
+|---|---|
+| Horas para analisar 67k talhões manualmente | 400–800h/safra |
+| Custo do agrônomo sênior (R$ 100–150/h consultor) | R$ 40.000–120.000/safra |
+| Frequência da análise completa | 1–2× por safra |
+| **Custo anual da alternativa manual** | **R$ 40.000–120.000** |
+
+**Economia anual vs. análise manual:** R$ 32.400–112.400  
+**ROI:** (economia − custo solução) / custo solução = **325% a 1.377%**
+
+### Alternativa B: Contratação de empresa de dados para construir solução equivalente
+
+| Item | Estimativa de mercado |
+|---|---|
+| Desenvolvimento de pipeline + API + frontend equivalente | R$ 120.000–250.000 |
+| Manutenção anual contratada | R$ 24.000–60.000/ano |
+| Custo total 3 anos | R$ 192.000–430.000 |
+| **Custo da nossa solução em 3 anos** | **~R$ 22.836** |
+| **Economia em 3 anos** | **R$ 169.000–407.000** |
+
+### Alternativa C: Ferramenta SaaS de analytics agronômico
+
+Plataformas como Trimble Ag, John Deere Operations Center ou AgWorld:
+
+| Item | Estimativa |
+|---|---|
+| Licença por usuário/mês | R$ 150–500/usuário |
+| Para 10 usuários (agrônomos + gestores) | R$ 1.500–5.000/mês |
+| Custo anual | R$ 18.000–60.000 |
+| Customização para regras Atvos | Não disponível (regras genéricas) |
+
+> SaaS genérico não implementa as regras específicas da Atvos (PRNT=80, limiares por faixa de corte, textura do Cerrado). A solução entregue é customizada para o portfólio de talhões e dados do parceiro.
+
+---
+
+## 6. Resumo do ROI
+
+| Comparação | Custo anual da alternativa | Custo anual da solução | Economia/ano | ROI |
+|---|---|---|---|---|
+| vs. agrônomo consultor (conservador) | R$ 40.000 | R$ 7.612 | R$ 32.388 | **325%** |
+| vs. agrônomo consultor (completo) | R$ 120.000 | R$ 7.612 | R$ 112.388 | **1.377%** |
+| vs. empresa de dados (3 anos) | R$ 64.000/ano | R$ 7.612/ano | R$ 56.388/ano | **641%** |
+| vs. SaaS genérico | R$ 36.000/ano | R$ 7.612/ano | R$ 28.388/ano | **273%** |
+
+**Pior cenário defensável: ROI de 273% ao ano** (vs. SaaS genérico mais barato do mercado, sem customização)
+
+---
+
+## 7. Quando Migrar para Cloud / Escalar
+
+| Gatilho | Ação recomendada | Custo adicional estimado |
+|---|---|---|
+| > 5 usuários simultâneos na API | Cloud Run com autoscaling | +R$ 50/mês |
+| Volume > 500k talhões | ProcessPoolExecutor ou Dask | Apenas dev (sem infra extra) |
+| Integração com ERP Atvos | Cloud Pub/Sub + Dataflow | +R$ 200–500/mês |
+| SLA 99,9%+ exigido | Cloud Run multi-region | +R$ 150/mês |
+| Dados de solo disponíveis | Adicionar mapeamento em `_preparar_talhao()` | ~8h dev (R$ 640) |

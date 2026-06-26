@@ -257,8 +257,9 @@ def _compute_relatorio(records: list) -> dict:
     for (unit, tid), area in unit_talhao_area.items():
         st = unit_talhao_status[(unit, tid)]
         por_unit[unit]["_set"].add(tid)
-        por_unit[unit]["area_total_ha"]    += area
-        por_unit[unit][f"area_{st}_ha"]    += area
+        por_unit[unit]["area_total_ha"]      += area
+        por_unit[unit][f"area_{st}_ha"]      += area
+        por_unit[unit][st] = por_unit[unit].get(st, 0) + 1
 
     def _pct(num, denom):
         return round(num / denom * 100, 1) if denom else 0.0
@@ -290,17 +291,21 @@ def _compute_relatorio(records: list) -> dict:
     for u, d in por_unit.items():
         at = d["area_total_ha"]
         unit_lista.append({
-            "unidade":           u,
-            "total_talhoes":     len(d["_set"]),
-            "area_total_ha":     round(at, 2),
-            "area_urgent_ha":    round(d["area_urgent_ha"], 2),
-            "area_attention_ha": round(d["area_attention_ha"], 2),
-            "area_monitor_ha":   round(d["area_monitor_ha"], 2),
-            "area_ok_ha":        round(d["area_ok_ha"], 2),
-            "pct_area_urgent":   _pct(d["area_urgent_ha"],   at),
+            "unidade":            u,
+            "total_talhoes":      len(d["_set"]),
+            "urgent":             d.get("urgent", 0),
+            "attention":          d.get("attention", 0),
+            "monitor":            d.get("monitor", 0),
+            "ok":                 d.get("ok", 0),
+            "area_total_ha":      round(at, 2),
+            "area_urgent_ha":     round(d["area_urgent_ha"], 2),
+            "area_attention_ha":  round(d["area_attention_ha"], 2),
+            "area_monitor_ha":    round(d["area_monitor_ha"], 2),
+            "area_ok_ha":         round(d["area_ok_ha"], 2),
+            "pct_area_urgent":    _pct(d["area_urgent_ha"],   at),
             "pct_area_attention": _pct(d["area_attention_ha"], at),
-            "pct_area_monitor":  _pct(d["area_monitor_ha"],  at),
-            "pct_area_ok":       _pct(d["area_ok_ha"],       at),
+            "pct_area_monitor":   _pct(d["area_monitor_ha"],  at),
+            "pct_area_ok":        _pct(d["area_ok_ha"],       at),
         })
 
     return {
