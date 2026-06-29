@@ -8,7 +8,7 @@ from rules.insumos import (
     _INSUMO_FONE,
     _INSUMO_DESSEC,
 )
-from helpers import assert_resultado_valido, assert_sem_dado, assert_nao_se_aplica
+from helpers import assert_resultado_valido, assert_sem_dado, assert_nao_se_aplica, assert_dado_suspeito
 
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -103,6 +103,28 @@ class TestDoseFosfatagem:
         assert_resultado_insumo(r)
         assert r["insumo"] == _INSUMO_FONE
         assert r["dose_kg_ha"] == r["valor_calculado"]
+
+    # ── OUTLIERS ─────────────────────────────────────────────────────────────
+
+    def test_tchan_negativo_e_outlier(self):
+        r = calcular_dose_fosfatagem({"tchan_estimado": -1.0})
+        assert_dado_suspeito(r, "tchan_estimado")
+        assert r["insumo"] is None
+        assert r["dose_kg_ha"] is None
+
+    def test_tchan_zero_retorna_dado_suspeito(self):
+        """TCH=0 significa produção nula — outlier para insumos."""
+        r = calcular_dose_fosfatagem({"tchan_estimado": 0.0})
+        assert_dado_suspeito(r, "tchan_estimado")
+
+    def test_tchan_acima_do_maximo_e_outlier(self):
+        r = calcular_dose_fosfatagem({"tchan_estimado": 301.0})
+        assert_dado_suspeito(r, "tchan_estimado")
+
+    @pytest.mark.parametrize("tchan", [-0.001, -100.0, 300.001, 9999.0])
+    def test_tchan_fora_do_intervalo_fisico(self, tchan):
+        r = calcular_dose_fosfatagem({"tchan_estimado": tchan})
+        assert_dado_suspeito(r, "tchan_estimado")
 
     # ── CONTRATO ─────────────────────────────────────────────────────────────
 
@@ -199,6 +221,23 @@ class TestDoseDessecacao:
             "no_corte": 6, "categoria": "Cana Soca", "reforma": "S"
         })
         assert "pré-reforma" in r["orientacao"]
+
+    # ── OUTLIERS ─────────────────────────────────────────────────────────────
+
+    def test_no_corte_negativo_e_outlier(self):
+        r = calcular_dose_dessecacao({"no_corte": -1, "categoria": "Cana Soca"})
+        assert_dado_suspeito(r, "no_corte")
+        assert r["insumo"] is None
+        assert r["dose_kg_ha"] is None
+
+    def test_no_corte_acima_do_maximo_e_outlier(self):
+        r = calcular_dose_dessecacao({"no_corte": 21, "categoria": "Cana Soca"})
+        assert_dado_suspeito(r, "no_corte")
+
+    @pytest.mark.parametrize("nc", [-1, -100, 21, 99])
+    def test_no_corte_fora_do_intervalo(self, nc):
+        r = calcular_dose_dessecacao({"no_corte": nc, "categoria": "Cana Soca"})
+        assert_dado_suspeito(r, "no_corte")
 
     # ── CONTRATO ─────────────────────────────────────────────────────────────
 

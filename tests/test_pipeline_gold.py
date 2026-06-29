@@ -248,3 +248,100 @@ class TestCenariosRegras:
         df_gold = _rodar_pipeline(rows)
         errad = df_gold[df_gold["processo"] == "erradicacao"].iloc[0]
         assert errad["regra_acionada"] == "reforma_ja_programada"
+
+
+# ── AREA_HA NA CAMADA GOLD ────────────────────────────────────────────────────
+
+class TestAreaHaGold:
+
+    def test_area_ha_presente_nas_colunas_gold(self):
+        assert "area_ha" in COLUNAS_GOLD
+
+    def test_area_ha_preenchida_quando_disponivel(self):
+        rows = [{"CHAVESIG": 5001, "TCH_PROD": 70.0, "NO_CORTE": 3,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N",
+                 "AREA_HA": 42.5, "tchan_estimado": 70.0}]
+        df_gold = _rodar_pipeline(rows)
+        assert (df_gold["area_ha"] == 42.5).all(), \
+            "area_ha deve ser 42.5 para todos os processos deste talhão"
+
+    def test_area_ha_none_quando_coluna_ausente(self):
+        rows = [{"CHAVESIG": 5002, "TCH_PROD": 60.0, "NO_CORTE": 2,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N"}]
+        df_gold = _rodar_pipeline(rows)
+        # Sem AREA_HA no Silver → area_ha deve ser None/NaN no Gold
+        for val in df_gold["area_ha"]:
+            assert val is None or (isinstance(val, float) and math.isnan(val)), \
+                f"Esperado None/NaN, got {val}"
+
+    def test_area_ha_consistente_em_todos_processos_do_talhao(self):
+        """Todos os processos de um mesmo talhão devem ter a mesma area_ha."""
+        rows = [{"CHAVESIG": 5003, "TCH_PROD": 75.0, "NO_CORTE": 4,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N",
+                 "AREA_HA": 30.0, "tchan_estimado": 75.0}]
+        df_gold = _rodar_pipeline(rows)
+        areas = df_gold["area_ha"].dropna().unique()
+        assert len(areas) == 1, "area_ha deve ser a mesma para todos os processos"
+        assert areas[0] == 30.0
+
+    def test_quantidade_total_usa_area_ha(self):
+        """quantidade_total_kg = dose_kg_ha × area_ha (verificação cruzada)."""
+        rows = [{"CHAVESIG": 5004, "TCH_PROD": 70.0, "NO_CORTE": 3,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N",
+                 "AREA_HA": 20.0, "tchan_estimado": 70.0}]
+        df_gold = _rodar_pipeline(rows)
+        fi = df_gold[df_gold["processo"] == "fosfatagem_insumo"].iloc[0]
+        if fi["dose_kg_ha"] is not None and not math.isnan(float(fi["dose_kg_ha"])):
+            dose = float(fi["dose_kg_ha"])
+            area = float(fi["area_ha"])
+            qtd  = float(fi["quantidade_total_kg"])
+            assert abs(qtd - dose * area) < 0.01, \
+                f"quantidade_total_kg={qtd} != dose={dose} × area={area}"
+
+
+# ── DETECÇÃO DE OUTLIERS NO PIPELINE ─────────────────────────────────────────
+
+class TestOutliersPipeline:
+
+    def test_tch_negativo_marcado_como_outlier_no_gold(self):
+        rows = [{"CHAVESIG": 6001, "TCH_PROD": -5.0, "NO_CORTE": 3,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 20.0}]
+        df_gold = _rodar_pipeline(rows)
+        errad = df_gold[df_gold["processo"] == "erradicacao"].iloc[0]
+        assert errad["regra_acionada"].startswith("outlier_"), \
+            f"TCH negativo deve gerar outlier, got '{errad['regra_acionada']}'"
+
+    def test_tch_extremamente_alto_marcado_como_outlier(self):
+        rows = [{"CHAVESIG": 6002, "TCH_PROD": 999.0, "NO_CORTE": 3,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 25.0}]
+        df_gold = _rodar_pipeline(rows)
+        errad = df_gold[df_gold["processo"] == "erradicacao"].iloc[0]
+        assert errad["regra_acionada"].startswith("outlier_")
+
+    def test_no_corte_negativo_marcado_como_outlier(self):
+        rows = [{"CHAVESIG": 6003, "TCH_PROD": 70.0, "NO_CORTE": -1,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 15.0}]
+        df_gold = _rodar_pipeline(rows)
+        errad = df_gold[df_gold["processo"] == "erradicacao"].iloc[0]
+        assert errad["regra_acionada"].startswith("outlier_")
+
+    def test_outlier_nao_travar_pipeline(self):
+        """Outliers em um talhão não devem impedir o processamento dos demais."""
+        rows = [
+            {"CHAVESIG": 6004, "TCH_PROD": -999.0, "NO_CORTE": -5,
+             "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 10.0},
+            {"CHAVESIG": 6005, "TCH_PROD": 70.0, "NO_CORTE": 3,
+             "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 30.0},
+        ]
+        df_gold = _rodar_pipeline(rows)
+        assert len(df_gold) == 2 * len(REGRAS)
+
+    def test_orientacao_dado_suspeito_no_gold(self):
+        """Quando outlier, orientacao começa com DADO_SUSPEITO e inclui motivo."""
+        rows = [{"CHAVESIG": 6006, "TCH_PROD": 500.0, "NO_CORTE": 3,
+                 "CATEGORIA": "Cana Soca", "Reforma": "N", "AREA_HA": 20.0}]
+        df_gold = _rodar_pipeline(rows)
+        errad = df_gold[df_gold["processo"] == "erradicacao"].iloc[0]
+        assert str(errad["orientacao"]).startswith("DADO_SUSPEITO")
+        # a orientacao deve conter o motivo (não apenas "DADO_SUSPEITO" sem contexto)
+        assert len(str(errad["orientacao"])) > len("DADO_SUSPEITO")

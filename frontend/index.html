@@ -359,11 +359,13 @@
                     <tr>
                       <th>Processo</th>
                       <th class="num-col" title="Total de avaliações (talhão × safra) para este processo">Avaliações</th>
-                      <th class="num-col" title="Avaliações com status urgente (ex.: erradicação recomendada)">Urgente</th>
-                      <th class="num-col" title="Avaliações com atenção necessária (ex.: dado de solo ausente)">Atenção</th>
+                      <th class="num-col" title="Avaliações com status urgente">Urgente</th>
+                      <th class="num-col" title="% da área total com status urgente">% Área Urg.</th>
+                      <th class="num-col" title="Avaliações com atenção necessária">Atenção</th>
+                      <th class="num-col" title="% da área total com atenção">% Área Ate.</th>
                       <th class="num-col" title="Avaliações em monitoramento contínuo">Monitorar</th>
                       <th class="num-col" title="Avaliações sem necessidade de intervenção">OK</th>
-                      <th class="num-col" title="Avaliações onde faltam dados de solo para gerar a orientação">Sem Dado</th>
+                      <th class="num-col" title="Avaliações onde faltam dados para gerar orientação">Sem Dado</th>
                     </tr>
                   </thead>
                   <tbody id="r-proc-tbody"></tbody>
@@ -385,10 +387,11 @@
                     <tr>
                       <th>Unidade</th>
                       <th class="num-col" title="Talhões únicos (IDs distintos) nesta unidade industrial">Talhões únicos</th>
-                      <th class="num-col" title="Avaliações com status urgente (soma de todos os processos)">Urgente</th>
-                      <th class="num-col" title="Avaliações com atenção necessária (soma de todos os processos)">Atenção</th>
-                      <th class="num-col" title="Avaliações em monitoramento (soma de todos os processos)">Monitorar</th>
-                      <th class="num-col" title="Avaliações sem necessidade de intervenção (soma de todos os processos)">OK</th>
+                      <th class="num-col" title="Soma das área_ha de todos os talhões desta unidade">Área Total (ha)</th>
+                      <th class="num-col" title="% da área com necessidade de intervenção urgente">% Área Urg.</th>
+                      <th class="num-col" title="% da área com dados ausentes ou suspeitos">% Área Ate.</th>
+                      <th class="num-col" title="% da área em monitoramento contínuo">% Área Mon.</th>
+                      <th class="num-col" title="% da área sem necessidade de intervenção">% Área OK</th>
                     </tr>
                   </thead>
                   <tbody id="r-unit-tbody"></tbody>

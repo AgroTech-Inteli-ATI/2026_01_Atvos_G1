@@ -89,34 +89,57 @@ function buildDemoTalhoes(recs) {
 
 function buildDemoRelatorio(recs) {
   const proc = {}, unit = {};
-  const total = recs.length;
+  const _pct = (a, t) => t > 0 ? Math.round(a / t * 100) : 0;
   for (const r of recs) {
-    if (!proc[r.processo]) proc[r.processo] = { total:0,urgent:0,attention:0,monitor:0,ok:0,sem_dado:0 };
+    if (!proc[r.processo]) proc[r.processo] = {
+      total:0, urgent:0, attention:0, monitor:0, ok:0, sem_dado:0,
+      area_urgent_ha:0, area_attention_ha:0, area_monitor_ha:0, area_ok_ha:0, area_total_ha:0,
+    };
     proc[r.processo].total++;
     proc[r.processo][r.status]++;
     if (r.regra_acionada.includes("dado_ausente")) proc[r.processo].sem_dado++;
+    proc[r.processo][`area_${r.status}_ha`] += 5;
+    proc[r.processo].area_total_ha += 5;
 
-    if (!unit[r.unidade]) unit[r.unidade] = { talhoes: new Set(), urgent:0,attention:0,monitor:0,ok:0 };
+    if (!unit[r.unidade]) unit[r.unidade] = {
+      talhoes: new Set(), urgent:0, attention:0, monitor:0, ok:0,
+      area_urgent_ha:0, area_attention_ha:0, area_monitor_ha:0, area_ok_ha:0, area_total_ha:0,
+    };
     unit[r.unidade].talhoes.add(r.id_talhao);
     unit[r.unidade][r.status]++;
+    unit[r.unidade][`area_${r.status}_ha`] += 5;
+    unit[r.unidade].area_total_ha += 5;
   }
   return {
-    por_processo: Object.entries(proc).map(([p,d]) => ({ processo:p, label: PROC[p]||p, ...d })),
-    por_unidade:  Object.entries(unit).map(([u,d]) => ({
+    por_processo: Object.entries(proc).map(([p,d]) => ({
+      processo:p, label: PROC[p]||p, ...d,
+      pct_area_urgent:    _pct(d.area_urgent_ha,    d.area_total_ha),
+      pct_area_attention: _pct(d.area_attention_ha, d.area_total_ha),
+      pct_area_monitor:   _pct(d.area_monitor_ha,   d.area_total_ha),
+      pct_area_ok:        _pct(d.area_ok_ha,        d.area_total_ha),
+    })),
+    por_unidade: Object.entries(unit).map(([u,d]) => ({
       unidade:u, total_talhoes: d.talhoes.size,
       urgent:d.urgent, attention:d.attention, monitor:d.monitor, ok:d.ok,
+      area_total_ha:      d.area_total_ha,
+      pct_area_urgent:    _pct(d.area_urgent_ha,    d.area_total_ha),
+      pct_area_attention: _pct(d.area_attention_ha, d.area_total_ha),
+      pct_area_monitor:   _pct(d.area_monitor_ha,   d.area_total_ha),
+      pct_area_ok:        _pct(d.area_ok_ha,        d.area_total_ha),
     })),
     top_regras: [
-      { regra:"dado_ausente_ph_solo",         total:67426, pct:14.3 },
-      { regra:"dado_ausente_p_disponivel",    total:67426, pct:14.3 },
-      { regra:"categoria_nao_plantio",        total:58608, pct:12.4 },
-      { regra:"textura_arenoso_sem_analise_al",total:30107,pct:6.4  },
+      { regra:"dado_ausente_ph_solo",          total:67426, pct:14.3 },
+      { regra:"dado_ausente_p_disponivel",     total:67426, pct:14.3 },
+      { regra:"categoria_nao_plantio",         total:58608, pct:12.4 },
+      { regra:"textura_arenoso_sem_analise_al",total:30107, pct:6.4  },
     ],
   };
 }
 
-const DEMO_TALHOES  = buildDemoTalhoes(DEMO_RECS);
+const DEMO_TALHOES   = buildDemoTalhoes(DEMO_RECS);
 const DEMO_RELATORIO = buildDemoRelatorio(DEMO_RECS);
+
+let _relatorioTotalAll = 471982;  // atualizado por renderRelatorio()
 
 // ── Estado global ───────────────────────────────────────────────────────────
 let isDemo = false;
@@ -539,7 +562,7 @@ async function loadRelatorio() {
 
 function exportRelatorio() {
   const date = new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
-  const meta = `Gerado em ${date} · ${(471982).toLocaleString("pt-BR")} registros · Safra 2026/27`;
+  const meta = `Gerado em ${date} · ${_relatorioTotalAll.toLocaleString("pt-BR")} orientações · Safra 2026/27`;
   const pm = e("r-print-meta");
   if (pm) pm.textContent = meta;
   window.print();
@@ -547,6 +570,7 @@ function exportRelatorio() {
 
 function renderRelatorio(data) {
   const totalAll = data.por_processo.reduce((s, p) => s + p.total, 0) || 1;
+  _relatorioTotalAll = totalAll;
   const nProc    = data.por_processo.length;
   const avaliacoes = Math.round(totalAll / nProc);   // linhas Silver = talhão × safra
   const talhoesUnicos = data.por_unidade.reduce((s, u) => s + u.total_talhoes, 0);
@@ -593,22 +617,25 @@ function renderRelatorio(data) {
     <tr>
       <td><strong>${esc(p.label||p.processo)}</strong></td>
       <td class="num-col">${p.total.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${p.urgent    ? "num-urgent"    : ""}">${p.urgent.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${p.attention ? "num-attention" : ""}">${p.attention.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${p.monitor   ? "num-monitor"   : ""}">${p.monitor.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${p.ok        ? "num-ok"        : ""}">${p.ok.toLocaleString("pt-BR")}</td>
-      <td class="num-col">${p.sem_dado.toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.urgent    ? "num-urgent"    : ""}">${(p.urgent||0).toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.pct_area_urgent  ? "num-urgent"    : ""}">${p.pct_area_urgent  != null ? p.pct_area_urgent  + "%" : "—"}</td>
+      <td class="num-col ${p.attention ? "num-attention" : ""}">${(p.attention||0).toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.pct_area_attention ? "num-attention" : ""}">${p.pct_area_attention != null ? p.pct_area_attention + "%" : "—"}</td>
+      <td class="num-col ${p.monitor   ? "num-monitor"   : ""}">${(p.monitor||0).toLocaleString("pt-BR")}</td>
+      <td class="num-col ${p.ok        ? "num-ok"        : ""}">${(p.ok||0).toLocaleString("pt-BR")}</td>
+      <td class="num-col">${(p.sem_dado||0).toLocaleString("pt-BR")}</td>
     </tr>`).join("");
 
   // Por unidade
   e("r-unit-tbody").innerHTML = data.por_unidade.map(u => `
     <tr>
       <td><strong>${esc(u.unidade)}</strong></td>
-      <td class="num-col">${u.total_talhoes.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${u.urgent    ? "num-urgent"    : ""}">${u.urgent.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${u.attention ? "num-attention" : ""}">${u.attention.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${u.monitor   ? "num-monitor"   : ""}">${u.monitor.toLocaleString("pt-BR")}</td>
-      <td class="num-col ${u.ok        ? "num-ok"        : ""}">${u.ok.toLocaleString("pt-BR")}</td>
+      <td class="num-col">${(u.total_talhoes||0).toLocaleString("pt-BR")}</td>
+      <td class="num-col">${u.area_total_ha != null ? (u.area_total_ha||0).toLocaleString("pt-BR",{maximumFractionDigits:0}) : "—"}</td>
+      <td class="num-col ${u.pct_area_urgent    ? "num-urgent"    : ""}">${u.pct_area_urgent    != null ? u.pct_area_urgent    + "%" : (u.urgent||0)}</td>
+      <td class="num-col ${u.pct_area_attention ? "num-attention" : ""}">${u.pct_area_attention != null ? u.pct_area_attention + "%" : (u.attention||0)}</td>
+      <td class="num-col ${u.pct_area_monitor   ? "num-monitor"   : ""}">${u.pct_area_monitor   != null ? u.pct_area_monitor   + "%" : (u.monitor||0)}</td>
+      <td class="num-col ${u.pct_area_ok        ? "num-ok"        : ""}">${u.pct_area_ok        != null ? u.pct_area_ok        + "%" : (u.ok||0)}</td>
     </tr>`).join("");
 
   // Top regras

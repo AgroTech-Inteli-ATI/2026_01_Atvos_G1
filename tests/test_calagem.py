@@ -2,7 +2,7 @@
 
 import pytest
 from rules.calagem import calcular_necessidade_calagem, _calcular_dose, PH_ADEQUADO, PH_CRITICO, DOSE_MAX_T_HA
-from helpers import assert_resultado_valido, assert_sem_dado
+from helpers import assert_resultado_valido, assert_sem_dado, assert_dado_suspeito
 
 
 # ── SEM_DADO — entradas inválidas ─────────────────────────────────────────────
@@ -111,6 +111,59 @@ def test_ph_baixo_ciclo_indefinido():
     assert_resultado_valido(r)
     assert r["regra_acionada"] == "ph_baixo_ciclo_indefinido"
     assert r["valor_calculado"] > 0
+
+
+# ── OUTLIERS ─────────────────────────────────────────────────────────────────
+
+def test_ph_negativo_e_outlier():
+    r = calcular_necessidade_calagem({"ph_solo": -1.0, "ctc": 80.0, "v_atual": 35.0})
+    assert_dado_suspeito(r, "ph_solo")
+
+
+def test_ph_acima_de_14_e_outlier():
+    r = calcular_necessidade_calagem({"ph_solo": 14.1, "ctc": 80.0, "v_atual": 35.0})
+    assert_dado_suspeito(r, "ph_solo")
+
+
+def test_ph_exatamente_zero_tratado_pelas_regras():
+    """pH=0 é o limite inferior físico — as regras recomendam calagem urgente (não é outlier)."""
+    r = calcular_necessidade_calagem({"ph_solo": 0.0, "ctc": 80.0, "v_atual": 35.0})
+    assert_resultado_valido(r)
+    assert r["orientacao"] != "DADO_SUSPEITO"
+    assert r["valor_calculado"] > 0
+
+
+def test_ph_exatamente_14_nao_e_outlier():
+    """pH=14 é o limite máximo físico — válido (borda não deve ser outlier)."""
+    r = calcular_necessidade_calagem({"ph_solo": 14.0, "ctc": 80.0, "v_atual": 35.0})
+    assert r["orientacao"] != "DADO_SUSPEITO"
+
+
+def test_ctc_negativa_e_outlier():
+    r = calcular_necessidade_calagem({"ph_solo": 4.8, "ctc": -10.0, "v_atual": 35.0})
+    assert_dado_suspeito(r, "ctc")
+
+
+def test_v_atual_negativa_e_outlier():
+    r = calcular_necessidade_calagem({"ph_solo": 4.8, "ctc": 80.0, "v_atual": -5.0})
+    assert_dado_suspeito(r, "v_atual")
+
+
+def test_v_atual_acima_de_100_e_outlier():
+    r = calcular_necessidade_calagem({"ph_solo": 4.8, "ctc": 80.0, "v_atual": 101.0})
+    assert_dado_suspeito(r, "v_atual")
+
+
+def test_v_atual_exatamente_100_nao_e_outlier():
+    """V=100% é saturação total — matematicamente válido."""
+    r = calcular_necessidade_calagem({"ph_solo": 4.8, "ctc": 80.0, "v_atual": 100.0})
+    assert r["orientacao"] != "DADO_SUSPEITO"
+
+
+@pytest.mark.parametrize("ph_outlier", [-0.001, 14.001, -100, 999])
+def test_ph_fora_do_intervalo_fisico(ph_outlier):
+    r = calcular_necessidade_calagem({"ph_solo": ph_outlier, "ctc": 80.0, "v_atual": 35.0})
+    assert_dado_suspeito(r, "ph_solo")
 
 
 # ── CONTRATO DE INTERFACE ─────────────────────────────────────────────────────

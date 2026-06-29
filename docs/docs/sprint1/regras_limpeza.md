@@ -62,17 +62,50 @@ As colunas originais são **mantidas** com seus nulos intactos.
 
 ---
 
-## 4. Imputação por Mediana (Nulo = Faltante)
+## 4. Imputação de Produção (Nulo = Faltante)
 
-Estratégia: mediana calculada dentro de cada grupo `UNID_IND` (unidade industrial).  
-Justificativa: valores de produção variam muito entre unidades, então usar a mediana global
-introduziria viés; a mediana por unidade respeita as diferenças regionais.
+As três colunas têm relação física: **TON_ESTIM = AREA_PROD × TCH_PROD**.  
+A imputação ocorre em dois passos sequenciais (função `imputar_producao()`):
+
+### Passo 1 — Derivação matemática (sem estimativa estatística)
+
+Quando dois dos três campos estão presentes, o terceiro é calculado exatamente pela relação física.  
+Isso mantém consistência interna sem introduzir viés estatístico.
+
+| Caso | Cálculo |
+|------|---------|
+| `AREA_PROD` ausente | `AREA_PROD = TON_ESTIM / TCH_PROD` (requer TCH_PROD > 0) |
+| `TCH_PROD` ausente | `TCH_PROD = TON_ESTIM / AREA_PROD` (requer AREA_PROD > 0) |
+| `TON_ESTIM` ausente | `TON_ESTIM = AREA_PROD × TCH_PROD` |
+
+### Passo 2 — Mediana estratificada em hierarquia de 4 níveis
+
+Para casos onde nenhuma derivação é possível (todos os três campos ausentes), aplica-se mediana por grupo em ordem decrescente de especificidade:
+
+| Nível | Agrupamento | Ativa quando |
+|-------|------------|--------------|
+| 1 | `UNID_IND + CATEGORIA + faixa_corte` | Grupo com ≥ 5 amostras válidas |
+| 2 | `UNID_IND + CATEGORIA` | Grupo do nível 1 muito pequeno |
+| 3 | `UNID_IND` | Grupo do nível 2 muito pequeno |
+| 4 | Mediana global | Garante completude — sem nulos residuais |
+
+**Justificativa do nível 1 vs. mediana simples por UNID_IND:**  
+TCH_PROD varia ~25% entre cana-planta (NO_CORTE ≤ 1) e soca tardia (NO_CORTE ≥ 7), conforme curva de senescência documentada pela Embrapa Agroenergia. Usar a mediana da unidade sem estratificação mistura esses perfis e introduz viés sistemático na variável mais importante do modelo de erradicação.
+
+**Faixas de corte (função `_faixa_corte()`):**
+
+| Faixa | NO_CORTE | Perfil |
+|-------|----------|--------|
+| `plantio` | ≤ 1 | Cana-planta — TCH máximo |
+| `soca_nova` | 2–3 | Curva descendente inicial |
+| `soca_media` | 4–6 | Produtividade intermediária |
+| `soca_tardia` | ≥ 7 | Candidatos a erradicação |
 
 | Coluna | Parte 2: nulos imputados | Parte 4: nulos imputados | Justificativa |
 |--------|--------------------------|--------------------------|---------------|
 | `AREA_PROD` | 14.210 | 4.900 | Todo talhão ativo deveria ter área de produção |
 | `TCH_PROD` | 14.210 | 4.900 | Todo talhão ativo deveria ter TCH estimado |
-| `TON_ESTIM` | 14.210 | 4.900 | Derivado de `AREA_PROD` x `TCH_PROD` |
+| `TON_ESTIM` | 14.210 | 4.900 | Derivado de AREA_PROD × TCH_PROD |
 
 ---
 

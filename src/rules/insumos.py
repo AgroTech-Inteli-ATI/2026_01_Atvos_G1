@@ -18,7 +18,7 @@ CONTRATO ESTENDIDO (além das 3 chaves padrão, estas funções adicionam):
 """
 
 from ._base import (
-    sem_dado, nao_se_aplica, resultado,
+    sem_dado, nao_se_aplica, resultado, dado_suspeito,
     numerico, texto, classificar_textura, ciclo_do_talhao,
 )
 
@@ -40,6 +40,13 @@ def _resultado_insumo(
 
 def _sem_dado_insumo(campo: str) -> dict:
     base = sem_dado(campo)
+    base["insumo"]     = None
+    base["dose_kg_ha"] = None
+    return base
+
+
+def _dado_suspeito_insumo(campo: str, valor, motivo: str) -> dict:
+    base = dado_suspeito(campo, valor, motivo)
     base["insumo"]     = None
     base["dose_kg_ha"] = None
     return base
@@ -168,6 +175,13 @@ def calcular_dose_fosfatagem(talhao: dict) -> dict:
 
     tchan = float(tchan)
 
+    if tchan <= 0:
+        return _dado_suspeito_insumo("tchan_estimado", tchan,
+                                     "TCH estimado deve ser positivo (produção nula invalida o cálculo de extração)")
+    if tchan > 300:
+        return _dado_suspeito_insumo("tchan_estimado", tchan,
+                                     "TCH estimado acima do máximo físico (> 300 t/ha)")
+
     # ── textura → eficiência de aproveitamento do P ───────────────────────────
     textura = classificar_textura(desc_amb)
     efic    = _EFICIENCIA_P.get(textura, _EFICIENCIA_P_DEFAULT) if textura else _EFICIENCIA_P_DEFAULT
@@ -240,7 +254,6 @@ _DOSE_DESSEC_L_HA = {
 _FATOR_INFESTACAO = {
     "baixa":  0.80,
     "leve":   0.80,
-    "media":  1.00,
     "media":  1.00,
     "alta":   1.20,
     "severa": 1.30,
@@ -331,6 +344,13 @@ def calcular_dose_dessecacao(talhao: dict) -> dict:
         return _sem_dado_insumo("no_corte")
 
     nc = int(no_corte)
+
+    if nc < 0:
+        return _dado_suspeito_insumo("no_corte", no_corte,
+                                     "número de corte não pode ser negativo")
+    if nc > 20:
+        return _dado_suspeito_insumo("no_corte", no_corte,
+                                     "número de cortes implausível (> 20)")
 
     # ── dose base por faixa de corte ──────────────────────────────────────────
     faixa = _faixa_corte(nc)

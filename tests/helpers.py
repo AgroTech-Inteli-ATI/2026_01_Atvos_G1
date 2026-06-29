@@ -32,3 +32,14 @@ def assert_nao_se_aplica(r: dict) -> None:
     assert_resultado_valido(r)
     assert r["orientacao"] == "NAO_SE_APLICA", \
         f"Esperado NAO_SE_APLICA, got '{r['orientacao']}'"
+
+
+def assert_dado_suspeito(r: dict, campo: str) -> None:
+    """Verifica resposta DADO_SUSPEITO para valor fora do intervalo físico."""
+    assert_resultado_valido(r)
+    assert r["orientacao"].startswith("DADO_SUSPEITO"), \
+        f"Esperado DADO_SUSPEITO, got '{r['orientacao']}'"
+    assert r["valor_calculado"] is None, \
+        "valor_calculado deve ser None em DADO_SUSPEITO"
+    assert f"outlier_{campo}" in r["regra_acionada"], \
+        f"regra_acionada '{r['regra_acionada']}' não indica outlier de '{campo}'"
